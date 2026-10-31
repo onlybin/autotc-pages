@@ -7,7 +7,8 @@ let lbData = null;
 let lbReqSeq = 0;
 
 const lbEl = Object.fromEntries(
-  ["lbMonth", "lbStore", "lbRows", "lbBoardSub", "lbTotal", "lbTrend", "lbGoalPercent", "lbGoalBar", "lbGoalNums", "lbGoalHint", "lbDetailBtn"]
+  ["lbMonth", "lbStore", "lbRows", "lbBoardSub", "lbTotal", "lbTrend", "lbGoalPercent", "lbGoalBar", "lbGoalNums", "lbGoalHint", "lbDetailBtn",
+   "lbGoalRule", "lbGoalRuleTag", "lbGoalRuleList", "lbGoalRuleNote"]
     .map((id) => [id, document.getElementById(id)])
 );
 
@@ -116,6 +117,45 @@ function renderRows(employees) {
   }).join("");
 }
 
+/** 提成发放档位，与后端 salesTargetCommissionPayout() 一一对应，改动需两边同步 */
+const LB_PAYOUT_TIERS = [
+  { min: 0, max: 60, rate: 0, label: "不足 60%" },
+  { min: 60, max: 81, rate: 70, label: "60%–80%" },
+  { min: 81, max: 91, rate: 90, label: "81%–90%" },
+  { min: 91, max: 111, rate: 100, label: "91%–110%" },
+  { min: 111, max: 131, rate: 110, label: "111%–130%" },
+  { min: 131, max: 151, rate: 120, label: "131%–150%" },
+  { min: 151, max: Infinity, rate: 130, label: "超过 150%" },
+];
+
+function lbPayoutTier(percent) {
+  const value = Number(percent) || 0;
+  return LB_PAYOUT_TIERS.find((tier) => value >= tier.min && value < tier.max) || LB_PAYOUT_TIERS[LB_PAYOUT_TIERS.length - 1];
+}
+
+/** 在销售目标区域展示"按达成率发放"的规则与当前所处档位 */
+function renderGoalRule(summary) {
+  const data = summary || {};
+  if (!lbEl.lbGoalRule) return;
+  const configured = Boolean(data.targetConfigured) && Number(data.periodTargetSales) > 0;
+  if (!configured) {
+    lbEl.lbGoalRule.hidden = true;
+    return;
+  }
+  const percent = Number(data.periodProgressPercent) || 0;
+  const active = lbPayoutTier(percent);
+  // 当月只提示、不真正调整；历史完整月份才按档位结算（后端 appliesCommissionPayout 的语义）
+  const hintOnly = String(data.commissionPolicyText || "").startsWith("当前月只提示");
+  lbEl.lbGoalRule.hidden = false;
+  lbEl.lbGoalRuleTag.textContent = hintOnly
+    ? `达成 ${percent.toFixed(2)}% → ${active.label}（本月仅提示，次月按此档结算）`
+    : `达成 ${percent.toFixed(2)}% → ${active.label}，按 ${active.rate}% 发放`;
+  lbEl.lbGoalRuleList.innerHTML = LB_PAYOUT_TIERS.map(
+    (tier) => `<li class="${tier === active ? "is-active" : ""}"><span>${tier.label}</span><b>${tier.rate}%</b></li>`,
+  ).join("");
+  lbEl.lbGoalRuleNote.textContent = String(data.commissionPolicyText || "");
+}
+
 function renderSummary(summary) {
   const data = summary || {};
   lbEl.lbTotal.textContent = lbMoney(data.periodTotalCommission);
@@ -143,6 +183,7 @@ function renderSummary(summary) {
     lbEl.lbGoalNums.textContent = `${lbMoney(data.periodActualSales)} / 未设置`;
     lbEl.lbGoalHint.textContent = "暂未设置本月销售目标，请先在后台管理中设定。";
   }
+  renderGoalRule(data);
 }
 
 function renderFilters() {
