@@ -11,7 +11,7 @@ compatibility_date = "2026-10-31"
 # id 由 `wrangler kv namespace create MXIPOS_SESSION` 生成后回填
 [[kv_namespaces]]
 binding = "MXIPOS_SESSION"
-id = "REPLACE_WITH_KV_NAMESPACE_ID"
+id = "ea68992a2bdd4ef98cfe24a9f9d5699a"
 
 # 注意：口令（MXIPOS_SESSION_KEY）不写在这里，用 `wrangler pages secret put` 写入，
 # 或写入 GitHub Secret 由 workflow 注入。wrangler.toml 会进 git，绝不能放密钥。

@@ -33,8 +33,9 @@ env:
   CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
   CF_KV_NAMESPACE_ID: ${{ secrets.CF_KV_NAMESPACE_ID }}
   COMMISSION_DB_PATH: ${{ github.workspace }}/pipeline/work/commission.sqlite3
-  MXIPOS_SESSION_FILE: ${{ runner.temp }}/mxipos_session/mxipos_api_session.json
   COMMISSION_DATA_OUTPUT: ${{ github.workspace }}/public/data.js
+  # 会话文件路径不放这里：workflow 级 env 不支持 runner 上下文，
+  # 用了会让整个工作流判为无效（run 会没有任何 job）。改在各 step 里用 $RUNNER_TEMP。
 
 jobs:
   fetch:
@@ -63,7 +64,7 @@ jobs:
         env:
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
           MODE: gate
-          FORCE: ${{ github.event_name == 'workflow_dispatch' && inputs.force || github.event.schedule == '0 16,22,4,10 * * *' }}
+          FORCE: ${{ (github.event_name == 'workflow_dispatch' && inputs.force) || github.event.schedule == '0 16,22,4,10 * * *' }}
         run: python pipeline/scripts/ci_session.py
 
       - name: 门禁结论
@@ -115,8 +116,9 @@ jobs:
         env:
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
           MODE: session
-          SESSION_OUT: ${{ env.MXIPOS_SESSION_FILE }}
-        run: python pipeline/scripts/ci_session.py
+        run: |
+          mkdir -p "$RUNNER_TEMP/mxipos_session"
+          SESSION_OUT="$RUNNER_TEMP/mxipos_session/mxipos_api_session.json" python pipeline/scripts/ci_session.py
 
       # 台账必须跨运行累积：走 Actions cache（私有，仅本仓库 workflow 可读）
       - name: 恢复台账数据库
@@ -135,7 +137,10 @@ jobs:
         run: |
           BACKFILL="${{ inputs.backfill_months }}"
           if [ -z "$BACKFILL" ]; then BACKFILL=1; fi
-          python scripts/pull_orders.py --backfill "$BACKFILL" --out "$COMMISSION_DATA_OUTPUT"
+          python scripts/pull_orders.py \
+            --backfill "$BACKFILL" \
+            --out "$COMMISSION_DATA_OUTPUT" \
+            --session "$RUNNER_TEMP/mxipos_session/mxipos_api_session.json"
 
       - name: 校验产物
         if: steps.gate.outputs.run == 'true'
