@@ -101,7 +101,16 @@ export default {
         return token;
       };
 
-      // ---------- 内部导入（CI 调用，Bearer 鉴权） ----------
+      // ---------- 内部接口（CI 调用，Bearer 鉴权） ----------
+      if (apiPath === "/internal/rules" && method === "GET") {
+        const expected = String(env.IMPORT_TOKEN || "");
+        const provided = (request.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
+        if (!expected) return json({ ok: false, message: "服务端未配置导入令牌" }, 503);
+        if (!safeEqual(provided, expected)) return json({ ok: false, message: "导入令牌不正确" }, 401);
+        const current = await store.currentRules();
+        return json({ ok: true, ruleSetId: current.ruleSetId, rules: current.rules });
+      }
+
       if (method === "POST" && apiPath === "/internal/import") {
         const expected = String(env.IMPORT_TOKEN || "");
         const provided = (request.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");

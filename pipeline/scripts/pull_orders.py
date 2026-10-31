@@ -31,6 +31,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.request
 from datetime import datetime, timedelta, timezone
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -39,6 +40,77 @@ sys.path.insert(0, HERE)
 
 CST = timezone(timedelta(hours=8))
 PYTHON = sys.executable or "python3"
+
+# 新通道后端（Worker + D1）。设置后：规则从 D1 取，订单写回 D1。
+WORKER_BASE = os.environ.get("COMMISSION_WORKER_BASE", "").strip().rstrip("/")
+IMPORT_TOKEN = os.environ.get("COMMISSION_IMPORT_TOKEN", "").strip()
+RULES_FILE = os.path.join(ROOT, "custom_rules.json")
+
+
+def http_json(url, method="GET", body=None, token="", timeout=120):
+    data = None if body is None else json.dumps(body, ensure_ascii=False).encode("utf-8")
+    headers = {"Content-Type": "application/json", "User-Agent": "autotc-ci/1.0"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    request = urllib.request.Request(url, data=data, headers=headers, method=method)
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def sync_rules_from_d1():
+    """把 D1 里的现行规则写成 custom_rules.json，供 generate_data.py 使用。
+
+    这一步很关键：后台规则改在 D1 后，若 CI 仍用旧快照算提成，导出的 data.js 会与看板不一致。
+    """
+    if not WORKER_BASE or not IMPORT_TOKEN:
+        log("未配置 WORKER_BASE / IMPORT_TOKEN，规则沿用本地快照")
+        return False
+    try:
+        payload = http_json(f"{WORKER_BASE}/autotc/api/internal/rules", token=IMPORT_TOKEN, timeout=60)
+        rules = payload.get("rules") or []
+        if not rules:
+            log("D1 返回的规则为空，沿用本地快照")
+            return False
+        with open(RULES_FILE, "w", encoding="utf-8") as handle:
+            json.dump({"updatedAt": now_text(), "rules": rules}, handle, ensure_ascii=False)
+        log(f"规则已从 D1 同步：{len(rules)} 条，ruleSetId={payload.get('ruleSetId')}")
+        return True
+    except Exception as exc:  # noqa: BLE001
+        log("从 D1 取规则失败，沿用本地快照", exc)
+        return False
+
+
+def push_orders_to_d1(data_file, month, source_name, sha):
+    """把这一批算好的订单写进 D1，使新通道看板与 CI 台账保持一致。"""
+    if not WORKER_BASE or not IMPORT_TOKEN:
+        return False
+    try:
+        with open(data_file, encoding="utf-8") as handle:
+            text = handle.read()
+        payload = json.loads(text.replace("window.COMMISSION_DATA", "", 1).strip().lstrip("=").strip().rstrip(";"))
+        orders = payload.get("orders") or []
+        result = http_json(
+            f"{WORKER_BASE}/autotc/api/internal/import",
+            method="POST",
+            token=IMPORT_TOKEN,
+            body={
+                "targetMonth": month,
+                "sourceFilename": source_name,
+                "sourceSha256": sha,
+                "orders": orders,
+                "fallbackRules": payload.get("rules") or [],
+            },
+            timeout=300,
+        )
+        log(f"D1 导入完成 {month}：rowCount={result.get('rowCount')}")
+        return True
+    except Exception as exc:  # noqa: BLE001
+        log("写入 D1 失败", exc)
+        return False
+
+
+def now_text():
+    return datetime.now(CST).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def log(*parts):
@@ -230,6 +302,9 @@ def main():
     months = [shift_month(opts["month"], -offset) for offset in range(opts["backfill"] - 1, -1, -1)]
     log("本次处理月份", ",".join(months), "DB=", opts["db"])
 
+    # 生成数据前先把 D1 的现行规则同步下来（后台改规则后这里立刻生效）
+    sync_rules_from_d1()
+
     os.makedirs(os.path.dirname(os.path.abspath(opts["db"])), exist_ok=True)
     work_dir = tempfile.mkdtemp(prefix="mxipos_ci_")
     results = []
@@ -277,6 +352,8 @@ def main():
             except Exception:  # noqa: BLE001
                 summary = summary[:200]
             log("台账已提交", month, summary)
+            # 同步写进 D1：新通道的看板与后台读的就是这份
+            push_orders_to_d1(generated, month, zip_name, sha)
             results.append({"month": month, "source": zip_name, "sha256": sha, "ledger": summary})
     finally:
         shutil.rmtree(work_dir, ignore_errors=True)

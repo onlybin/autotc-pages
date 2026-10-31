@@ -1,29 +1,26 @@
 /**
- * 方案 A · 同域反代（过渡形态，非容灾）
+ * 同域反代（目标后端已切到 Cloudflare Worker + D1）
  * ---------------------------------------------------------------
- * 路由：/autotc/api/*  →  https://aininja365.xyz/autotc/api/*
+ * 路由：/autotc/api/*  →  https://autotc-api.<subdomain>.workers.dev/autotc/api/*
  *
- * 为什么需要这一层：
- *   app.js:1 与 leaderboard.js:2 的 apiBase 都是相对路径 "/autotc/api"，
- *   看板的主渲染路径是 loadReport() → api("/report")，不是读 data.js。
- *   因此「把静态文件传到 Pages 就能用」不成立；必须在本域上提供同路径接口。
+ * 为什么保留这一层：
+ *   app.js / leaderboard.js / manual_page.js 的 apiBase 都是 "/autotc/api"，
+ *   前端一行都不用改；另外 workers.dev 域名在国内被墙，浏览器直连不通，
+ *   经本站边缘节点转发则不受影响。
  *
- * 代价（验收与汇报时不得回避）：
- *   新通道运行期硬依赖旧主机在线。旧平板死机时本 Function 返回 502，
- *   前端数据区报错。这不是双活，只是多一个入口。彻底解耦是方案 B（Worker + D1）。
+ * 与一期（方案 A）的本质区别：
+ *   过去反代到旧主机，旧平板一断电新通道就废；
+ *   现在反代到 D1 后端，**旧主机断电、断网、被搬走都不影响新通道**。
+ *   旧通道（aininja365.xyz/autotc/）仍跑它自己的 nginx + SQLite，两套互不依赖。
  *
  * 边界：
- *   1. 本 Function 只做透传，不解析业务逻辑，不注入/改写响应体。
- *   2. 二期（2026-10-31）起放行写方法并转发 Cookie，以便后台管理页在新通道可用：
- *      - 允许 GET/HEAD/POST/PUT/PATCH/DELETE
- *      - 透传 Cookie（commission_admin_session，Path=/autotc，天然覆盖 /autotc/api/*）
- *      - 逐条透传 Set-Cookie（登录/登出）
- *      鉴权仍由上游 server.js 判定，未登录的写请求照样 401。
- *   3. 上游 CORS 与本站无关（server.js 的 MXIPOS_ORIGIN_RE 只放行 *.mxipos.com），
- *      同域反代因此天然规避跨域，不需要改动旧主机任何配置。
+ *   1. 只做透传，不解析业务逻辑，不注入/改写响应体。
+ *   2. 放行 GET/HEAD/POST/PUT/PATCH/DELETE，透传 Cookie 并逐条回传 Set-Cookie，
+ *      以便后台管理页在新通道可用；鉴权由上游 Worker 判定。
+ *   3. 同域，无跨域问题。
  */
 
-const UPSTREAM_ORIGIN = "https://aininja365.xyz";
+const UPSTREAM_ORIGIN = "https://autotc-api.tel18207595.workers.dev";
 const API_PREFIX = "/autotc/api";
 
 /** 透传给上游的请求头白名单 */
@@ -101,7 +98,7 @@ export async function onRequest(context) {
     // 旧主机不可达（平板死机 / Tunnel 断开 / Wi-Fi 掉线）
     return jsonError(
       502,
-      "上游旧通道不可达，新通道数据区暂不可用",
+      "上游 D1 后端不可达，请稍后重试",
       String((error && error.message) || error),
     );
   }
@@ -114,7 +111,7 @@ export async function onRequest(context) {
   for (const cookie of cookies) responseHeaders.append("set-cookie", cookie);
   // 与 nginx `add_header Cache-Control no-store always` 保持同一策略
   responseHeaders.set("cache-control", "no-store");
-  responseHeaders.set("x-proxy-via", "legacy-aininja365");
+  responseHeaders.set("x-proxy-via", "d1-worker");
   responseHeaders.set("x-proxy-elapsed-ms", String(Date.now() - startedAt));
 
   const bodyless = method === "HEAD" || upstream.status === 204 || upstream.status === 304;

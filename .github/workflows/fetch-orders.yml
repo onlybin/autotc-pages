@@ -37,6 +37,9 @@ env:
   TZ: Asia/Shanghai
   COMMISSION_DB_PATH: ${{ github.workspace }}/pipeline/work/commission.sqlite3
   COMMISSION_DATA_OUTPUT: ${{ github.workspace }}/public/data.js
+  # 新通道后端（D1）：规则从这里取，算好的订单写回这里
+  COMMISSION_WORKER_BASE: https://autotc-api.tel18207595.workers.dev
+  COMMISSION_IMPORT_TOKEN: ${{ secrets.IMPORT_TOKEN }}
   # 会话文件路径不放这里：workflow 级 env 不支持 runner 上下文，
   # 用了会让整个工作流判为无效（run 会没有任何 job）。改在各 step 里用 $RUNNER_TEMP。
 

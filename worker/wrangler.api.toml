@@ -1,0 +1,17 @@
+# autotc-api：新通道后端（D1）
+# 部署：在 worker/ 目录执行 `wrangler deploy --config wrangler.api.toml`
+# 密钥（用 wrangler secret put 或 CF API 写入，不落本文件）：
+#   ADMIN_PASSWORD              后台登录密码
+#   ALLOCATION_CONFIRM_PASSWORD 分摊核对确认密码
+#   IMPORT_TOKEN                CI 导入接口的 Bearer 令牌
+
+name = "autotc-api"
+main = "src/api.js"
+compatibility_date = "2026-10-31"
+# rules.js 用 node:crypto 的 createHash 生成订单 line_key（主键，必须与旧库逐字节一致）
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "autotc-ledger"
+database_id = "58ed31a1-f43d-475f-9c30-977ced3ac532"
