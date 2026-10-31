@@ -1,0 +1,45 @@
+name: heartbeat
+
+# 防 GitHub 自动停用定时 workflow。
+# 背景：官方明确对「60 天无提交活动」的仓库停用 schedule 触发，
+# 该规则主要针对 public 仓库 —— 本仓库按决策 3-B 设为 public，
+# 所以心跳提交不是可选项，而是 schedule 能长期存活的前提。
+# 顺带解决：仓库一旦转回 private，这份提交也能作为活动凭证。
+
+on:
+  schedule:
+    - cron: "0 3 1 * *" # 每月 1 日 UTC 03:00 = 北京 11:00
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: heartbeat
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: 检出
+        uses: actions/checkout@v4
+
+      - name: 追加心跳行
+        run: |
+          stamp="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          printf -- "- %s  heartbeat ok\n" "$stamp" >> docs/heartbeat.md
+          echo "写入 $stamp"
+
+      - name: 提交
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/heartbeat.md
+          if git diff --cached --quiet; then
+            echo "无变更，跳过"
+            exit 0
+          fi
+          git commit -m "chore(heartbeat): keep scheduled workflows alive [skip ci]"
+          git push

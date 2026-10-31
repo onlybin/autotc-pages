@@ -1,0 +1,17 @@
+# Cloudflare Pages · 外烟提成系统新通道
+# 部署方式锁定 Direct Upload（wrangler pages deploy），不要接 Git 集成：
+#   data.js 是 3.9 MB 的生成物，被护栏 5 禁止入 git，
+#   Git 集成模式下 Pages 构建不出数据文件，两条路线互斥。
+
+name = "autotc-pages"
+pages_build_output_dir = "public"
+compatibility_date = "2026-10-31"
+
+# 手机 token 接收端（functions/api/mxipos-session.js）用它落会话
+# id 由 `wrangler kv namespace create MXIPOS_SESSION` 生成后回填
+[[kv_namespaces]]
+binding = "MXIPOS_SESSION"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+# 注意：口令（MXIPOS_SESSION_KEY）不写在这里，用 `wrangler pages secret put` 写入，
+# 或写入 GitHub Secret 由 workflow 注入。wrangler.toml 会进 git，绝不能放密钥。

@@ -1,0 +1,63 @@
+name: p0-gate
+
+# P0 门禁实验：Actions runner（Azure 网段，海外 IP）能否直连 MXIPOS 业务网关。
+#
+# 为什么必须单独跑：
+#   MXIPOS 网关 cspht.mxipos.com 前置阿里云 WAF，海外 IP 是否放行从未在 runner 上验证。
+#   本地用境外住宅代理探过（返回 respCode=000000 + data.img，WAF 未一刀切封禁），
+#   但 Azure 网段与住宅 IP 的处置策略可能不同，必须以 runner 实测为准。
+#
+# 实验只打「无需认证」的端点：不登录、不带 token、不产生任何订单导出。
+#
+# 判定：
+#   respCode=000000 或 100002，且含 data.img  → ✅ WAF 放行，可走 Actions 直连
+#   403 / 拦截页 / 人机验证 HTML / 超时        → ❌ 降级方案 B（Actions 只做发布）
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: 探针
+        run: |
+          set -u
+          KEY="$(python3 -c 'import time;print(int(time.time()*1000))')"
+          SIGN="$(python3 -c "import hashlib,sys;print(hashlib.md5(('20180726fuiou95138|'+sys.argv[1]+'|20180726fuiou95138').encode()).hexdigest())" "$KEY")"
+          echo "key=$KEY"
+          echo "sign=$SIGN"
+          echo "runner ip: $(curl -s --max-time 15 https://api.ipify.org || echo unknown)"
+          echo "--- response ---"
+          code="$(curl -sS --max-time 40 -o /tmp/resp.txt -w '%{http_code}' \
+            -X POST 'https://cspht.mxipos.com/public/getImgCode.action' \
+            -H 'Content-Type: application/x-www-form-urlencoded' \
+            --data-urlencode 'filterVersion=' \
+            --data-urlencode "key=$KEY" \
+            --data-urlencode "sign=$SIGN" \
+            --data-urlencode 'language=zh_CN' \
+            --data-urlencode 'notCloud=true' || echo '000')"
+          echo "http=$code"
+          echo "bytes=$(wc -c < /tmp/resp.txt)"
+          head -c 600 /tmp/resp.txt
+          echo
+          {
+            echo "## P0 门禁"
+            echo "- runner IP: $(curl -s --max-time 10 https://api.ipify.org || echo unknown)"
+            echo "- HTTP: $code"
+            echo "- 响应片段: \`$(head -c 300 /tmp/resp.txt | tr -d '\n')\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$code" != "200" ]; then
+            echo "::error::P0 失败：HTTP $code，海外 IP 可能被封，需降级方案 B"
+            exit 1
+          fi
+          if grep -q '"img"' /tmp/resp.txt || grep -q '"respCode":"100002"' /tmp/resp.txt || grep -q '"respCode":"000000"' /tmp/resp.txt; then
+            echo "::notice::P0 通过：WAF 放行，Actions 可直连 MXIPOS"
+          else
+            echo "::error::P0 结论不明：HTTP 200 但响应不含预期字段，人工复核"
+            exit 1
+          fi

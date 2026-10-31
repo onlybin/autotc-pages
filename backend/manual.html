@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>后台管理</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="styles.css?v=20260703-schedule-workbench" />
+  </head>
+  <body class="admin-body">
+    <section class="login-screen" id="loginScreen" hidden>
+      <form class="login-card" id="loginForm">
+        <div class="brand login-brand">
+          <span class="brand-mark" aria-hidden="true">¥</span>
+          <span>外烟提成后台</span>
+        </div>
+        <h1>后台访问需要验证密码</h1>
+        <p>为保护提成规则和补录记录，进入后台前请先验证。</p>
+        <label>
+          <span>后台密码</span>
+          <input id="passwordInput" type="password" autocomplete="current-password" placeholder="请输入后台密码" />
+        </label>
+        <button class="primary-btn" type="submit">验证进入</button>
+        <p class="form-status" id="loginStatus"></p>
+        <a class="text-link" href="index.html">返回统计看板</a>
+      </form>
+    </section>
+
+    <div class="app-shell admin-shell" id="adminApp" hidden>
+      <aside class="admin-sidebar" aria-label="后台导航">
+        <a class="brand admin-brand" href="manual.html" aria-label="外烟提成后台首页">
+          <span class="brand-mark admin-brand-mark" aria-hidden="true">¥</span>
+          <span>外烟提成后台</span>
+        </a>
+        <nav class="admin-menu">
+          <a class="active" href="#adminWorkbench"><span aria-hidden="true">▦</span><b>工作台</b></a>
+          <a href="#automationPanel"><span aria-hidden="true">◷</span><b>自动更新</b></a>
+          <a href="#salesTargetPanel"><span aria-hidden="true">◎</span><b>销售目标</b></a>
+          <a href="#manualPanel"><span aria-hidden="true">▤</span><b>手工补录</b></a>
+          <a href="#shiftSharePanel"><span aria-hidden="true">◇</span><b>排班系统</b></a>
+          <a href="#rulesPanel"><span aria-hidden="true">⚙</span><b>提成规则</b></a>
+          <a href="index.html"><span aria-hidden="true">↗</span><b>统计看板</b></a>
+        </nav>
+        <div class="admin-sidebar-note">
+          <span>规则来源</span>
+          <strong id="adminRuleSourceLine">正在读取...</strong>
+        </div>
+      </aside>
+
+      <div class="admin-stage">
+        <header class="app-topbar admin-topbar">
+          <div class="admin-crumb">
+            <span aria-hidden="true">☰</span>
+            <b>概览</b>
+            <span aria-hidden="true">›</span>
+            <strong>工作台</strong>
+          </div>
+          <div class="top-actions">
+            <button class="ghost-btn admin-icon-btn" id="exportManualBtn" type="button" aria-label="导出手工记录">⇩</button>
+            <a class="ghost-btn" href="index.html">返回统计</a>
+            <button class="ghost-btn" id="logoutBtn" type="button">退出后台</button>
+            <span class="admin-avatar" aria-hidden="true">管</span>
+          </div>
+        </header>
+
+        <nav class="admin-tabs" aria-label="后台工作区标签">
+          <a href="index.html">分析页</a>
+          <a class="active" href="#adminWorkbench">工作台</a>
+          <a href="#rulesPanel">规则维护</a>
+        </nav>
+
+        <main class="main-stack admin-main" id="adminWorkbench">
+          <section class="admin-workbench-grid">
+            <article class="admin-welcome-card">
+              <div class="admin-mascot" aria-hidden="true">¥</div>
+              <div>
+                <h1>早安，管理员，开始处理今日后台事项吧！</h1>
+                <p id="adminGeneratedAt">正在读取数据时间...</p>
+              </div>
+              <dl class="admin-stat-strip">
+                <div>
+                  <dt>待录入</dt>
+                  <dd id="adminStatDrafts">0</dd>
+                </div>
+                <div>
+                  <dt>手工记录</dt>
+                  <dd id="adminStatManuals">0</dd>
+                </div>
+                <div>
+                  <dt>班次</dt>
+                  <dd id="adminStatShifts">0</dd>
+                </div>
+                <div>
+                  <dt>规则</dt>
+                  <dd id="adminStatRules">0</dd>
+                </div>
+              </dl>
+            </article>
+
+            <article class="panel admin-quick-card">
+              <div class="section-head">
+                <div>
+                  <h2>快捷导航</h2>
+                </div>
+              </div>
+              <div class="admin-quick-grid">
+                <a href="#manualPanel"><span aria-hidden="true">▤</span><b>手工补录</b></a>
+                <a href="#shiftSharePanel"><span aria-hidden="true">◇</span><b>排班系统</b></a>
+                <a href="#rulesPanel"><span aria-hidden="true">⚙</span><b>规则列表</b></a>
+                <a href="#salesTargetPanel"><span aria-hidden="true">◎</span><b>销售目标</b></a>
+                <a href="#automationPanel"><span aria-hidden="true">◷</span><b>自动更新</b></a>
+              </div>
+            </article>
+          </section>
+
+        <section class="notice-panel" id="migrationPanel" hidden>
+          <div>
+            <strong>检测到旧版浏览器本地规则</strong>
+            <p>可以一键导入为服务器规则。导入后，电脑和手机都会以服务器规则为准。</p>
+          </div>
+          <button class="primary-btn" id="importLocalRulesBtn" type="button">导入到服务器规则</button>
+        </section>
+
+        <section class="notice-panel" id="manualMigrationPanel" hidden>
+          <div>
+            <strong>检测到浏览器本地手工记录</strong>
+            <p>导入服务器台账后，记录会冻结当前提成，并可在其它设备查询。</p>
+          </div>
+          <button class="primary-btn" id="importLocalManualBtn" type="button">导入手工记录</button>
+        </section>
+
+        <section class="panel automation-panel" id="automationPanel">
+          <div class="section-head">
+            <div>
+              <p class="section-kicker">数据任务</p>
+              <h2>自动更新订单数据</h2>
+            </div>
+            <span class="status-pill">每 6 小时</span>
+          </div>
+          <div class="automation-grid">
+            <div>
+              <strong>自动任务内容</strong>
+              <p>远端定时获取订单并写入历史台账，断电恢复后会自动补拉。</p>
+            </div>
+            <div>
+              <strong>规则优先级</strong>
+              <p id="serverRuleSource">正在读取规则来源...</p>
+            </div>
+            <div>
+              <strong>数据时间</strong>
+              <p id="dataGeneratedAt">正在读取数据时间...</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel" id="salesTargetPanel">
+          <div class="section-head">
+            <div>
+              <p class="section-kicker">全店月目标</p>
+              <h2>销售目标管理</h2>
+              <a class="text-link" href="#salesTargetPanel">销售目标</a>
+            </div>
+            <span class="status-pill" id="currentSalesTargetLine">正在读取销售目标...</span>
+          </div>
+          <div class="rule-toolbar">
+            <label class="rule-effective-date"><span>目标月份</span><input id="targetMonthInput" type="month" /></label>
+            <label class="rule-effective-date"><span>目标金额</span><input id="targetSalesInput" inputmode="decimal" placeholder="例如：5000" /></label>
+            <button class="primary-btn" id="saveSalesTargetBtn" type="button">保存销售目标</button>
+            <span class="save-status" id="salesTargetStatus">登录后读取销售目标...</span>
+          </div>
+          <div class="automation-grid">
+            <div>
+              <strong>统计页来源文案</strong>
+              <p>销售目标XX元[由管理员后台设定] 表示该月全店目标由管理员在本后台维护。</p>
+            </div>
+            <div>
+              <strong>目标口径</strong>
+              <p>每个月全店只保留一个销售目标，统计页会用计提商品销售额加进度补录对比该目标。</p>
+            </div>
+            <div>
+              <strong>当前月份状态</strong>
+              <p id="currentSalesTargetStatus">正在读取...</p>
+            </div>
+          </div>
+          <div class="section-head compact-head">
+            <div>
+              <p class="section-kicker">现金与缺失订单</p>
+              <h2>销售额进度补录</h2>
+            </div>
+          </div>
+          <div class="rule-toolbar">
+            <label class="rule-effective-date"><span>补录日期</span><input id="supplementDateInput" type="date" /></label>
+            <label class="rule-effective-date"><span>补录销售额</span><input id="supplementAmountInput" inputmode="decimal" placeholder="例如：300" /></label>
+            <label class="rule-effective-date"><span>备注</span><input id="supplementNoteInput" placeholder="现金收款未进订单" /></label>
+            <button class="primary-btn" id="saveSupplementBtn" type="button">保存进度补录</button>
+          </div>
+          <p class="panel-note">销售额进度补录只影响销售目标进度，不进入提成明细、收银员排行或提成结算。</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>日期</th>
+                  <th class="num">补录销售额</th>
+                  <th>备注</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="salesTargetSupplementBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel" id="manualPanel">
+          <div class="section-head">
+            <div>
+              <p class="section-kicker">逐条填写</p>
+              <h2>新增手工记录</h2>
+            </div>
+            <span class="status-pill" id="draftCount">1 行</span>
+          </div>
+          <div class="table-wrap manual-entry-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>日期</th>
+                  <th>成交时间</th>
+                  <th>商品名</th>
+                  <th class="num">单价</th>
+                  <th class="num">计提包数</th>
+                  <th>收银员名字</th>
+                  <th>事由</th>
+                  <th>匹配规则</th>
+                  <th class="num">提成</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="entryBody"></tbody>
+            </table>
+          </div>
+          <div class="manual-actions">
+            <button class="ghost-btn" id="addRowBtn" type="button">新增一行</button>
+            <button class="primary-btn" id="saveRowsBtn" type="button">保存到统计</button>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="section-head">
+            <div>
+              <p class="section-kicker">已保存</p>
+              <h2>手工记录</h2>
+            </div>
+            <span class="status-pill" id="savedCount">0 行</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>日期</th>
+                  <th>成交时间</th>
+                  <th>商品名</th>
+                  <th class="num">单价</th>
+                  <th class="num">计提包数</th>
+                  <th>收银员</th>
+                  <th>事由</th>
+                  <th>匹配规则</th>
+                  <th class="num">提成</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="savedBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel shift-share-panel" id="shiftSharePanel">
+          <div class="section-head">
+            <div>
+              <p class="section-kicker">班次模板与高峰覆盖</p>
+              <h2>排班系统</h2>
+            </div>
+            <span class="status-pill" id="shiftShareCount">0 条</span>
+          </div>
+          <div class="rule-toolbar">
+            <label class="rule-effective-date"><span>起始日期</span><input id="shiftRangeStart" type="date" /></label>
+            <label class="rule-effective-date"><span>结束日期</span><input id="shiftRangeEnd" type="date" /></label>
+            <label class="rule-effective-date"><span>收银员</span><input id="shiftRangeCashier" list="cashierList" autocomplete="off" placeholder="收银员姓名" /></label>
+            <label class="rule-effective-date"><span>班次类型</span><select id="shiftTemplateSelect"></select></label>
+            <label class="rule-effective-date"><span>班次时段</span><input id="shiftRangeSegments" placeholder="07:00-17:00 或 11:00-13:00/19:00-次日01:00" /></label>
+            <label class="rule-effective-date"><span>订单生效</span><input id="shiftRangeEffective" type="datetime-local" /></label>
+            <button class="ghost-btn" id="generateShiftRangeBtn" type="button">按范围生成</button>
+            <button class="ghost-btn" id="addShiftShareBtn" type="button">新增班次</button>
+            <button class="primary-btn" id="saveShiftSharesBtn" type="button">保存班次均分</button>
+            <span class="save-status" id="shiftShareStatus">正在读取班次...</span>
+          </div>
+          <div class="automation-grid shift-template-grid">
+            <div>
+              <strong>建模规则</strong>
+              <p>一个班次可以包含多个时间段；分段班会拆成多个可统计 segment，但仍保留同一个班次名称。</p>
+            </div>
+            <div>
+              <strong>门店营业时间</strong>
+              <p>07:00 至次日 03:00，晚班和深夜高峰按跨天窗口处理。</p>
+            </div>
+            <div>
+              <strong>高峰覆盖</strong>
+              <p>午高峰、晚高峰、深夜高峰默认按至少 2 人在岗判断。</p>
+            </div>
+          </div>
+          <div class="schedule-workbench" id="scheduleWorkbench">
+            <div class="schedule-workbench-head">
+              <div>
+                <strong>排班工作台</strong>
+                <p>按员工和日期直接选择班次；保存后自动生成连续班、分段班和跨天 segment。</p>
+              </div>
+              <div class="schedule-workbench-actions">
+                <button class="ghost-btn" id="addScheduleCashierBtn" type="button">加入员工</button>
+                <button class="ghost-btn" id="copyPreviousDayBtn" type="button">复制上一日</button>
+              </div>
+            </div>
+            <div class="schedule-legend" aria-label="班次图例">
+              <span><i class="legend-dot shift-white"></i>白班</span>
+              <span><i class="legend-dot shift-night"></i>晚班</span>
+              <span><i class="legend-dot shift-floating"></i>穿插班</span>
+              <span><i class="legend-dot shift-off"></i>休息</span>
+            </div>
+            <div class="schedule-matrix-wrap">
+              <table class="schedule-matrix" aria-label="排班矩阵">
+                <thead id="scheduleMatrixHead"></thead>
+                <tbody id="scheduleMatrixBody"></tbody>
+              </table>
+            </div>
+            <div class="schedule-coverage-grid" id="scheduleCoverageGrid" aria-label="高峰覆盖日历"></div>
+          </div>
+          <div class="table-wrap shift-coverage-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>高峰</th>
+                  <th>时间段</th>
+                  <th>在岗人数</th>
+                  <th>覆盖人员</th>
+                  <th>状态</th>
+                </tr>
+              </thead>
+              <tbody id="shiftCoverageBody"></tbody>
+            </table>
+          </div>
+          <div class="table-wrap shift-share-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>启用</th>
+                  <th>收银员</th>
+                  <th>班次</th>
+                  <th>类型</th>
+                  <th>段次</th>
+                  <th>排班日期</th>
+                  <th>开始时间</th>
+                  <th>结束时间（早于开始=次日）</th>
+                  <th>订单生效时间</th>
+                  <th>实际覆盖</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="shiftShareBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel rule-management-panel" id="rulesPanel">
+          <div class="section-head">
+            <div>
+              <p class="section-kicker">提成规则</p>
+              <h2>外烟提成列表清单</h2>
+            </div>
+            <span class="status-pill" id="ruleCount">0 条</span>
+          </div>
+          <div class="rule-toolbar">
+            <button class="ghost-btn" id="addRuleBtn" type="button">新增规则</button>
+            <button class="primary-btn" id="saveRulesBtn" type="button">保存新规则（从现在生效）</button>
+            <button class="ghost-btn" id="resetRulesBtn" type="button">恢复数据文件规则</button>
+            <button class="ghost-btn" id="exportRulesBtn" type="button">导出规则</button>
+            <label class="rule-effective-date"><span>历史重置起始时间</span><input id="ruleEffectiveDate" type="datetime-local" /></label>
+            <button class="danger-btn" id="previewResetRulesBtn" type="button">预览历史重置</button>
+            <span class="save-status" id="rulesStatus">正在读取规则...</span>
+          </div>
+          <div class="rule-impact" id="ruleImpactPanel" hidden>
+            <p id="ruleImpactText"></p>
+            <div class="rule-change-list" id="ruleImpactChanges"></div>
+            <button class="danger-btn" id="forceRulesBtn" type="button">重置规则并重算</button>
+            <button class="ghost-btn" id="cancelForceRulesBtn" type="button">取消</button>
+          </div>
+          <div class="table-wrap rules-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>商品名 / 系列名</th>
+                  <th class="num">包价</th>
+                  <th class="num">条价</th>
+                  <th class="num">提成/包</th>
+                  <th>来源</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="ruleBody"></tbody>
+            </table>
+          </div>
+        </section>
+        </main>
+      </div>
+    </div>
+
+    <script src="data.js?v=20260622-2"></script>
+    <script src="manual.js?v=20261025-trad-placeholder"></script>
+    <script src="manual_page.js?v=20260703-schedule-workbench"></script>
+  </body>
+</html>

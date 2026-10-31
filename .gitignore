@@ -1,0 +1,57 @@
+# ============================================================
+# 外烟提成系统 · Cloudflare Pages（auto.aininja365.xyz）
+# 护栏 5：经营数据与凭据一律不入 git
+# ============================================================
+
+# ---- 经营数据（体积大 + 含逐笔销售额，绝不入库）----
+data.js
+data.js.tmp
+data.js.*
+custom_rules.json
+*.custom_rules.json
+
+# ---- 数据库 ----
+*.sqlite3
+*.sqlite3-*
+*.db
+
+# ---- 会话 / 凭据 ----
+mxipos_session*.json
+mxipos_api_session.json
+credentials.env
+.dev.vars
+.env
+.env.*
+
+# ---- 备份 / 临时 / 历史产物 ----
+*.bak
+*.bak.*
+*.new
+*.tmp
+*.log
+backup/
+backups/
+releases/
+deploy_staging/
+downloads/
+archive/
+$BAK/
+
+# ---- 运行时 ----
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+venv/
+.workbuddy/
+.pytest_cache/
+.wrangler/
+work/
+
+# ---- 系统垃圾文件 ----
+Thumbs.db
+desktop.ini
+NUL
+
+# ---- D 类浏览器链路暂存（仅本地留档，权威副本在旧主机，见 docs/DEPRECATED.md）----
+legacy_browser/

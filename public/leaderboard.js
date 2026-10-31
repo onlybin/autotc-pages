@@ -1,0 +1,167 @@
+/* 员工提成排行榜：数据全部来自 /autotc/api/leaderboard（现有提成台账同一口径） */
+const lbApiBase = location.protocol === "file:" ? "" : "/autotc/api";
+const lbQuery = new URLSearchParams(location.search);
+const lbState = { month: lbQuery.get("month") || "", store: lbQuery.get("store") || "" };
+let lbData = null;
+let lbReqSeq = 0;
+
+const lbEl = Object.fromEntries(
+  ["lbMonth", "lbStore", "lbRows", "lbBoardSub", "lbTotal", "lbTrend", "lbGoalPercent", "lbGoalBar", "lbGoalNums", "lbGoalHint", "lbDetailBtn"]
+    .map((id) => [id, document.getElementById(id)])
+);
+
+const lbAliases = { 陈漠莉: "陈漫莉" };
+const lbName = (value) => lbAliases[String(value || "").split("/")[0].trim()] || String(value || "").split("/")[0].trim() || "未记录";
+const lbMoney = (value) => `¥ ${Number(value || 0).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const lbEscape = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+const AVATAR_COLORS = [
+  ["#5ea8f5", "#0b63ce"], ["#f7b733", "#e07b0e"], ["#8e9df5", "#4a5fd0"],
+  ["#5fd0a5", "#0e9d70"], ["#f58ea8", "#d13d63"], ["#9b8ef5", "#6246d0"],
+];
+const avatarColor = (name) => {
+  let hash = 0;
+  for (const ch of String(name)) hash = (hash * 31 + ch.codePointAt(0)) >>> 0;
+  return AVATAR_COLORS[hash % AVATAR_COLORS.length];
+};
+
+async function lbApi(path) {
+  const response = await fetch(`${lbApiBase}${path}`, { cache: "no-store" });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload.ok === false) throw new Error(payload.message || `请求失败：${response.status}`);
+  return payload;
+}
+
+function renderSkeleton() {
+  lbEl.lbRows.innerHTML = Array.from({ length: 6 }, () => `
+    <div class="lb-skel-row">
+      <span class="lb-skel" style="width:26px"></span>
+      <span style="display:flex;gap:12px;align-items:center"><span class="lb-skel circle"></span><span class="lb-skel" style="width:90px"></span></span>
+      <span class="lb-skel" style="width:80px"></span>
+      <span class="lb-skel" style="width:80px"></span>
+      <span class="lb-skel"></span>
+    </div>`).join("");
+}
+
+function renderState(kind, message) {
+  const retry = kind === "error" ? `<button type="button" id="lbRetry">重试</button>` : "";
+  lbEl.lbRows.innerHTML = `<div class="lb-state">${lbEscape(message)}<br>${retry}</div>`;
+  document.getElementById("lbRetry")?.addEventListener("click", loadLeaderboard);
+}
+
+function medalHtml(rank) {
+  if (rank <= 3) return `<span class="lb-medal g${rank}">${rank}</span>`;
+  return `<span class="lb-rank-num">${rank}</span>`;
+}
+
+function progressHtml(person) {
+  if (person.progressPercent === null || person.progressPercent === undefined || !Number.isFinite(Number(person.progressPercent))) {
+    return `<span class="lb-progress-none">暂未设置目标</span>`;
+  }
+  const pct = Number(person.progressPercent);
+  const width = Math.max(0, Math.min(100, pct));
+  return `
+    <div class="lb-progress" role="progressbar" aria-valuenow="${pct.toFixed(1)}" aria-valuemin="0" aria-valuemax="100"
+         title="个人本月计提销售额 / 门店月销售目标">
+      <div class="lb-progress-fill" style="width:${width}%"></div>
+    </div>
+    <span class="lb-progress-pct">${pct.toFixed(0)}%</span>`;
+}
+
+function renderRows(employees) {
+  const top = employees.slice(0, 10);
+  lbEl.lbBoardSub.textContent = `TOP ${top.length} ｜ 本月提成排名${employees.length > 10 ? `（共 ${employees.length} 人，仅展示前 10）` : ""}`;
+  if (!top.length) {
+    renderState("empty", "当前筛选条件下暂无提成数据，请尝试切换月份或门店。");
+    return;
+  }
+  lbEl.lbRows.innerHTML = top.map((person) => {
+    const name = lbName(person.name);
+    const [c1, c2] = avatarColor(name);
+    return `
+    <div class="lb-row ${person.rank === 1 ? "lb-top1" : ""}" role="row">
+      <span class="lb-rank">${medalHtml(person.rank)}</span>
+      <span class="lb-person">
+        <span class="lb-avatar" style="background:linear-gradient(140deg,${c1},${c2})">${lbEscape(name.slice(0, 1))}</span>
+        <span class="lb-person-meta"><b>${lbEscape(name)}</b><small>店员 · ${person.orderCount} 单</small></span>
+      </span>
+      <span class="lb-money month"><b>${lbMoney(person.currentPeriodCommission)}</b></span>
+      <span class="lb-money total">${lbMoney(person.cumulativeCommission)}</span>
+      <span class="lb-progress-cell">${progressHtml(person)}</span>
+    </div>`;
+  }).join("");
+}
+
+function renderSummary(summary) {
+  const data = summary || {};
+  lbEl.lbTotal.textContent = lbMoney(data.periodTotalCommission);
+  if (data.previousPeriodCommission !== null && data.previousPeriodCommission !== undefined && data.changePercent !== null) {
+    const pct = Number(data.changePercent);
+    const arrow = pct >= 0 ? "▲" : "▼";
+    lbEl.lbTrend.innerHTML = `<b>${arrow} 较上月 ${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%</b>`;
+  } else {
+    lbEl.lbTrend.textContent = "";
+  }
+  const goalBar = lbEl.lbGoalBar.closest(".lb-progress");
+  if (data.targetConfigured && Number(data.periodTargetSales) > 0) {
+    const pct = Number(data.periodProgressPercent) || 0;
+    lbEl.lbGoalPercent.textContent = `${pct.toFixed(0)}%`;
+    lbEl.lbGoalBar.style.width = `${Math.max(0, Math.min(100, pct))}%`;
+    goalBar?.setAttribute("aria-valuenow", pct.toFixed(1));
+    lbEl.lbGoalNums.textContent = `${lbMoney(data.periodActualSales)} / ${lbMoney(data.periodTargetSales)}`;
+    lbEl.lbGoalHint.textContent = pct >= 100
+      ? `已超过目标 ${lbMoney(data.exceededTarget)}！保持领先，冲刺更高奖励！`
+      : `距离目标还差 ${lbMoney(data.remainingTarget)}！再接再厉，冲刺更高奖励！`;
+  } else {
+    lbEl.lbGoalPercent.textContent = "--";
+    lbEl.lbGoalBar.style.width = "0";
+    goalBar?.setAttribute("aria-valuenow", "0");
+    lbEl.lbGoalNums.textContent = `${lbMoney(data.periodActualSales)} / 未设置`;
+    lbEl.lbGoalHint.textContent = "暂未设置本月销售目标，请先在后台管理中设定。";
+  }
+}
+
+function renderFilters() {
+  const months = lbData.months || [];
+  lbEl.lbMonth.innerHTML = months.map((m) => `<option value="${lbEscape(m)}">${lbEscape(m)}</option>`).join("");
+  lbEl.lbMonth.value = lbData.month;
+  const stores = lbData.stores || [];
+  if (stores.length <= 1) {
+    lbEl.lbStore.innerHTML = `<option>${lbEscape(stores[0] || "鸿湖罗森便利店")}</option>`;
+    lbEl.lbStore.disabled = true;
+  } else {
+    lbEl.lbStore.innerHTML = [`<option value="">全部门店</option>`, ...stores.map((s) => `<option value="${lbEscape(s)}">${lbEscape(s)}</option>`)].join("");
+    lbEl.lbStore.value = lbData.store || "";
+    lbEl.lbStore.disabled = false;
+  }
+  lbEl.lbDetailBtn.href = `index.html?month=${encodeURIComponent(lbData.month)}#detailPanel`;
+}
+
+async function loadLeaderboard() {
+  if (!lbApiBase) {
+    renderState("error", "请通过系统服务地址访问本页面（/autotc/leaderboard.html）。");
+    return;
+  }
+  const seq = ++lbReqSeq;
+  renderSkeleton();
+  try {
+    const params = new URLSearchParams();
+    if (lbState.month) params.set("month", lbState.month);
+    if (lbState.store) params.set("store", lbState.store);
+    const data = await lbApi(`/leaderboard${params.size ? `?${params}` : ""}`);
+    if (seq !== lbReqSeq) return; // 防止旧请求覆盖新筛选结果
+    lbData = data;
+    lbState.month = data.month;
+    renderFilters();
+    renderRows(data.employees || []);
+    renderSummary(data.summary);
+  } catch (error) {
+    if (seq !== lbReqSeq) return;
+    renderState("error", `排行榜加载失败：${error.message}`);
+    renderSummary(null);
+  }
+}
+
+lbEl.lbMonth.addEventListener("change", () => { lbState.month = lbEl.lbMonth.value; loadLeaderboard(); });
+lbEl.lbStore.addEventListener("change", () => { lbState.store = lbEl.lbStore.value; loadLeaderboard(); });
+
+loadLeaderboard();

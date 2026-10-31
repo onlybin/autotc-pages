@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>一次性设置 - 台账自动上报</title>
+<style>
+  :root { --bg:#0f1512; --card:#17211d; --line:#2a3730; --txt:#e8f0ec; --dim:#8ba39a; --accent:#39c07a; --warn:#f0b429; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--txt); font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif; padding:20px 16px 44px; line-height:1.7; }
+  h1 { font-size:20px; margin:0 0 6px; }
+  h2 { font-size:15px; margin:22px 0 10px; color:#b9d6c8; }
+  .sub { color:var(--dim); font-size:13px; margin-bottom:18px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; margin-bottom:14px; }
+  .card.hi { border-color:#2f6b4c; }
+  a.btn { display:block; text-align:center; background:var(--accent); color:#06120c; border-radius:11px; padding:15px; font-size:16px; font-weight:700; text-decoration:none; margin:14px 0 6px; }
+  a.btn2 { display:block; text-align:center; background:#22322b; color:var(--txt); border-radius:11px; padding:14px; font-size:15px; font-weight:600; text-decoration:none; margin:10px 0 4px; }
+  .need { background:#1d2a24; border:1px solid #2f6b4c; border-radius:10px; padding:12px 14px; margin:0 0 16px; font-size:13.5px; }
+  .need b { color:var(--accent); }
+  .step { display:flex; gap:12px; margin-bottom:18px; }
+  .num { flex:0 0 26px; height:26px; border-radius:50%; background:var(--accent); color:#06120c; font-size:14px; font-weight:700; text-align:center; line-height:26px; }
+  .body { flex:1; font-size:14px; color:#cfe0d8; }
+  .body b { color:#fff; }
+  .hint { color:var(--dim); font-size:12.5px; margin-top:3px; }
+  .chip { display:inline-block; background:#0d1310; border:1px solid var(--line); border-radius:6px; padding:1px 7px; font-size:12.5px; color:#b9d6c8; margin:2px 4px 2px 0; }
+  .dim { color:var(--dim); font-size:12.5px; }
+  .check li { font-size:13.5px; color:#cfe0d8; margin-bottom:8px; }
+  code { background:#0d1310; border:1px solid var(--line); border-radius:5px; padding:1px 5px; color:#b9d6c8; }
+</style>
+</head>
+<body>
+  <h1>一次性设置</h1>
+  <div class="sub">装好之后，登录 MXIPOS 就自动上报，什么都不用点</div>
+
+  <div class="need">
+    要装 <b>两样东西</b>，缺一不可：<br />
+    ① 一个能装插件的浏览器（Firefox）<br />
+    ② 一个叫 <b>Tampermonkey</b> 的插件 —— 真正干活的是它<br />
+    <span class="dim">只装浏览器不装插件，等于买了手机没装卡，什么都不会发生。</span>
+  </div>
+
+  <div class="card hi">
+    <h2 style="margin-top:0">四步装完</h2>
+
+    <div class="step">
+      <div class="num">1</div>
+      <div class="body">
+        <b>装 Firefox 浏览器</b>
+        <div class="hint">应用商店搜 Firefox，免费。装完先打开一次。</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="num">2</div>
+      <div class="body">
+        <b>在 Firefox 里装 Tampermonkey 插件</b>
+        <div class="hint">Firefox 右上角 <span class="chip">⋮</span> 菜单 → <span class="chip">附加组件</span> → 搜索 <span class="chip">Tampermonkey</span> → 点「添加到 Firefox」→ 允许。</div>
+        <div class="hint">装好后地址栏右边会多出一个 Tampermonkey 图标，说明插件到位了。</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="num">3</div>
+      <div class="body">
+        <b>安装台账脚本</b>
+        <div class="hint">回到这个页面，点下面绿色按钮 → Tampermonkey 会弹出一个安装页 → 点「安装」。</div>
+      </div>
+    </div>
+
+    <div class="step" style="margin-bottom:6px">
+      <div class="num">4</div>
+      <div class="body">
+        <b>用 Firefox 登录 MXIPOS</b>
+        <div class="hint">登录成功那一刻，右下角会弹「台账已更新」。以后每天只要打开 Firefox 登录就行，不用点任何按钮。</div>
+      </div>
+    </div>
+
+    <a class="btn" href="/autotc.user.js">安装台账脚本</a>
+    <div class="hint" style="text-align:center">第 3 步才点这个按钮，前两步没做完点了也没反应</div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">怎么确认装好了</h2>
+    <ul class="check" style="padding-left:20px;margin:6px 0 0">
+      <li>Firefox 菜单里能看到「附加组件」，里面列着 Tampermonkey → 插件好了。</li>
+      <li>点 Tampermonkey 图标 → 管理面板里能看到「MXIPOS 台账自动上报」→ 脚本好了。</li>
+      <li>登录 MXIPOS 后右下角弹绿字 → 全部好了。</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">不想装两样东西？</h2>
+    <p class="dim" style="margin:0 0 10px">用现在手机上的浏览器（Chrome 也行）加一个书签，每次在 MXIPOS 页面上点一下。功能完全一样，只多一次点击。</p>
+    <a class="btn2" href="/bookmark.html">去打书签页</a>
+    <div class="hint" style="text-align:center">进入后输入你自己的上报口令，口令由店主单独发放，不写在网页上</div>
+  </div>
+
+  <p class="dim" style="margin-top:18px">为什么非要插件：手机版 Chrome 不允许装任何插件，所以要在 Chrome 里做"零点击"在技术上不成立。Firefox 是目前手机上唯一正规支持插件的浏览器。</p>
+</body>
+</html>

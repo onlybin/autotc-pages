@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>生成台账书签 - 外烟提成系统</title>
+<style>
+  :root { --bg:#0f1512; --card:#17211d; --line:#2a3730; --txt:#e8f0ec; --dim:#8ba39a; --accent:#39c07a; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--txt); font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif; padding:20px 16px 40px; line-height:1.65; }
+  h1 { font-size:19px; margin:0 0 4px; }
+  h2 { font-size:15px; margin:22px 0 8px; color:#b9d6c8; }
+  .sub { color:var(--dim); font-size:13px; margin-bottom:18px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; margin-bottom:14px; }
+  input { width:100%; background:#0d1310; border:1px solid var(--line); color:var(--txt); border-radius:10px; padding:12px; font-size:16px; }
+  textarea { width:100%; background:#0d1310; border:1px solid var(--line); color:#b9d6c8; border-radius:10px; padding:11px 12px; font-size:11.5px; font-family:ui-monospace,Menlo,monospace; min-height:150px; word-break:break-all; line-height:1.5; }
+  button { width:100%; margin-top:12px; background:var(--accent); color:#06120c; border:0; border-radius:11px; padding:14px; font-size:16px; font-weight:700; }
+  button.ghost { background:#22322b; color:var(--txt); font-weight:600; }
+  button:disabled { opacity:.5; }
+  #out { margin-top:10px; font-size:13.5px; }
+  .ok { color:var(--accent); } .err { color:#ff7a6b; }
+  ol { padding-left:20px; margin:8px 0 0; }
+  li { margin-bottom:9px; font-size:13.5px; color:#cfe0d8; }
+  .dim { color:var(--dim); font-size:12.5px; }
+  code { background:#0d1310; border:1px solid var(--line); border-radius:5px; padding:1px 5px; color:#b9d6c8; }
+</style>
+</head>
+<body>
+  <h1>生成台账书签</h1>
+  <div class="sub">一次生成，之后在手机上随手点一下就能完成上报</div>
+
+  <div class="card">
+    <input id="key" type="password" autocomplete="off" placeholder="6 位数字口令" />
+    <button id="gen">生成书签代码</button>
+    <div id="out"></div>
+    <textarea id="code" readonly hidden></textarea>
+    <button id="copy" class="ghost" hidden>复制书签代码</button>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">怎么用（就三步）</h2>
+    <ol>
+      <li>点上面的「复制书签代码」。</li>
+      <li>在浏览器里随便存一个书签，把它的「网址」换成刚复制的东西。</li>
+      <li>以后不管在哪个页面，点这个书签就行 —— 没登录它会自己跳到 MXIPOS，登录好再点一次，数据就上去了。</li>
+    </ol>
+    <p class="dim" style="margin:12px 0 0">书签在「新标签页」上点也没问题，它会自动带你去 MXIPOS，不用先自己找页面。</p>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">安卓 / Chrome 具体操作</h2>
+    <ol>
+      <li>随便打开一个网页 → 右上角菜单 → 星标（加书签）→ 保存。</li>
+      <li>菜单 → 书签 → 长按刚存的那个 → 编辑 → 把「网址」整段删掉，粘贴上面复制的代码 → 保存。</li>
+      <li>点它即可。</li>
+    </ol>
+    <h2>iPhone / Safari 具体操作</h2>
+    <ol>
+      <li>点分享按钮 → 添加书签 → 存到「个人收藏」。</li>
+      <li>打开「书签」→ 编辑 → 点刚存的那个 → 把地址改为上面复制的代码 → 完成。</li>
+      <li>之后在书签里点它即可。</li>
+    </ol>
+    <p class="dim" style="margin:12px 0 0">部分浏览器会过滤 <code>javascript:</code> 前缀，若点击完全没反应，改用下方兜底方式。</p>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">兜底：粘贴提交</h2>
+    <p class="dim" style="margin:0">书签失效时，直接打开 <a href="/session.html" style="color:var(--accent)">会话上报页</a>，粘贴会话内容与口令提交即可。书签若报「网络错误」，会自动把会话复制到剪贴板，直接粘贴过去。</p>
+  </div>
+
+<script>
+(function () {
+  var API = "https://auto.aininja365.xyz/api/mxipos-session";
+  var out = document.getElementById("out");
+  var code = document.getElementById("code");
+  var copyBtn = document.getElementById("copy");
+
+  function build(key) {
+    return "javascript:(async()=>{"
+      + "if(!/mxipos\\.com$/i.test(location.hostname)){"
+      + "alert('这个页面上没有登录信息。\\n正在帮你打开 MXIPOS，登录好之后再点一次这个书签就行。');"
+      + "location.href='https://sp.mxipos.com/';return}"
+      + "const K='" + key + "',U='" + API + "',o={};"
+      + "const pick=(re,v)=>{const m=v.match(re);return m?m[1]:''};"
+      + "const scan=st=>{for(let i=0;i<st.length;i++){"
+      + "const v=String(st.getItem(st.key(i))||'');"
+      + "const t=v.match(/\"token\"\\s*:\\s*\"([0-9a-zA-Z]{16,128})\"/);if(!t)continue;"
+      + "o.token=t[1];"
+      + "o.timestamp=pick(/\"timestamp\"\\s*:\\s*\"?(\\d{10,16})/,v);"
+      + "o.loginId=pick(/\"loginId\"\\s*:\\s*\"([^\"]{3,32})\"/,v);"
+      + "o.mchntCd=pick(/\"mchntCd\"\\s*:\\s*\"([0-9A-Za-z]{6,32})\"/,v);"
+      + "o.singleShopId=pick(/\"singleShopId\"\\s*:\\s*\"?(\\d+)/,v);"
+      + "return true}return false};"
+      + "if(!scan(localStorage))scan(sessionStorage);"
+      + "if(!o.token){alert('这个页面里没有登录信息。\\n请先在 MXIPOS 里登录，再点这个书签。');return}"
+      + "if(!o.loginId||!o.mchntCd||!o.timestamp){alert('登录信息不完整，请重新登录 MXIPOS 后再点这个书签。');return}"
+      + "try{const r=await fetch(U,{method:'POST',headers:{'Content-Type':'application/json','X-Session-Key':K},body:JSON.stringify(o)});"
+      + "const j=await r.json();"
+      + "alert(j.ok?('已提交 ✅ 账号 '+o.loginId+'\\n服务器正在拉单，约 1 分钟后刷新看板'):('失败: '+(j.message||r.status)))"
+      + "}catch(e){if(navigator.clipboard)navigator.clipboard.writeText(JSON.stringify(o));"
+      + "alert('网络错误: '+e.message+'\\n已复制到剪贴板，可粘贴到 '+U.replace('/api/mxipos-session','')+'/session.html')}})()";
+  }
+
+  var genBtn = document.getElementById("gen");
+
+  function generate() {
+    var key = document.getElementById("key").value.trim();
+    if (key.length < 4) { out.className = "err"; out.textContent = "口令太短，请检查"; return; }
+    code.value = build(key);
+    code.hidden = false;
+    copyBtn.hidden = false;
+    out.className = "ok";
+    out.textContent = "已生成，长度 " + code.value.length + " 字符。点下面「复制书签代码」，再按教程加到书签里。";
+  }
+
+  genBtn.addEventListener("click", generate);
+
+  // 链接带 ?k= 时自动填好并生成，手机上一步都不用输入
+  (function autoFill() {
+    var preset = "";
+    try { preset = new URLSearchParams(location.search).get("k") || ""; } catch (e) { preset = ""; }
+    if (!preset) return;
+    document.getElementById("key").value = preset;
+    document.getElementById("key").type = "hidden";
+    document.getElementById("key").style.display = "none";
+    genBtn.hidden = true;
+    generate();
+    document.querySelector("h1").textContent = "书签已就绪";
+    document.querySelector(".sub").textContent = "口令已自动填好，直接复制下面的代码";
+  })();
+
+  copyBtn.addEventListener("click", async function () {
+    try {
+      await navigator.clipboard.writeText(code.value);
+      out.className = "ok"; out.textContent = "已复制到剪贴板。";
+    } catch (e) {
+      code.select(); document.execCommand("copy");
+      out.className = "ok"; out.textContent = "已复制（兼容模式）。";
+    }
+  });
+})();
+</script>
+</body>
+</html>

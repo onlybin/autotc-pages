@@ -1,0 +1,176 @@
+name: fetch-orders
+
+# 外烟提成系统 · 拉单 + 计算 + 发布（双轨并行中的新通道）
+# 只写 Cloudflare Pages 与 Cloudflare KV，不触碰旧通道（aininja365.xyz/autotc/）
+
+on:
+  schedule:
+    # ★ GitHub Actions cron 一律 UTC。
+    #   北京时间 00/06/12/18 = UTC 16/22/04/10，直接写 0 0,6,12,18 会整整错 8 小时。
+    - cron: "0 16,22,4,10 * * *"
+    # 轻量轮询：只有手机上报过新 token 才真跑（决策 4-A）。避免每 15 分钟打一次商户网关。
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "忽略会话是否变化，强制执行一次拉单"
+        type: boolean
+        default: true
+      backfill_months:
+        description: "回溯月份数（1=仅当月，最多 24）"
+        type: string
+        default: "1"
+
+# 互斥：替代远端 mxipos_http_fetch.py 里的 fcntl.flock 文件锁
+concurrency:
+  group: fetch-orders
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+  CF_KV_NAMESPACE_ID: ${{ secrets.CF_KV_NAMESPACE_ID }}
+  COMMISSION_DB_PATH: ${{ github.workspace }}/pipeline/work/commission.sqlite3
+  MXIPOS_SESSION_FILE: ${{ runner.temp }}/mxipos_session/mxipos_api_session.json
+  COMMISSION_DATA_OUTPUT: ${{ github.workspace }}/public/data.js
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: 检出
+        uses: actions/checkout@v4
+
+      - name: 安装 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 安装 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: 安装 Python 依赖
+        run: pip install --quiet openpyxl
+
+      # ---------- 门禁：判断本次是否真的要拉单 ----------
+      - name: 会话门禁
+        id: gate
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          MODE: gate
+          FORCE: ${{ github.event_name == 'workflow_dispatch' && inputs.force || github.event.schedule == '0 16,22,4,10 * * *' }}
+        run: python pipeline/scripts/ci_session.py
+
+      - name: 门禁结论
+        run: |
+          echo "run=${{ steps.gate.outputs.run }}"
+          echo "reason=${{ steps.gate.outputs.reason }}"
+          echo "age_hours=${{ steps.gate.outputs.age_hours }}"
+          if [ -n "${{ steps.gate.outputs.reason }}" ]; then
+            echo "### 门禁：${{ steps.gate.outputs.reason }}" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      # ---------- 真正的拉单链路（仅在需要时执行）----------
+      - name: 写入上报口令（部署期注入，仓库内只有占位符）
+        if: steps.gate.outputs.run == 'true'
+        env:
+          MXIPOS_SESSION_KEY: ${{ secrets.MXIPOS_SESSION_KEY }}
+        run: |
+          python3 - <<'PY'
+          import os, pathlib, sys
+          key = os.environ.get("MXIPOS_SESSION_KEY", "").strip()
+          if not key:
+              sys.exit("缺少 secret MXIPOS_SESSION_KEY")
+          path = pathlib.Path("public/autotc.user.js")
+          text = path.read_text(encoding="utf-8")
+          if "__SESSION_KEY__" not in text:
+              sys.exit("占位符 __SESSION_KEY__ 不存在，拒绝重复注入")
+          path.write_text(text.replace("__SESSION_KEY__", key), encoding="utf-8")
+          print("已注入上报口令（%d 位）" % len(key))
+          PY
+
+      - name: 写入规则源（custom_rules.json，不入 git）
+        if: steps.gate.outputs.run == 'true'
+        env:
+          CUSTOM_RULES_B64: ${{ secrets.CUSTOM_RULES_B64 }}
+        run: |
+          python3 - <<'PY'
+          import base64, os, pathlib, sys
+          raw = os.environ.get("CUSTOM_RULES_B64", "").strip()
+          if not raw:
+              sys.exit("缺少 secret CUSTOM_RULES_B64（规则清单，base64 后 11KB 左右）")
+          data = base64.b64decode(raw)
+          path = pathlib.Path("pipeline/custom_rules.json")
+          path.write_bytes(data)
+          print("custom_rules.json 已写入 %d bytes" % len(data))
+          PY
+
+      - name: 从 KV 取会话
+        if: steps.gate.outputs.run == 'true'
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          MODE: session
+          SESSION_OUT: ${{ env.MXIPOS_SESSION_FILE }}
+        run: python pipeline/scripts/ci_session.py
+
+      # 台账必须跨运行累积：走 Actions cache（私有，仅本仓库 workflow 可读）
+      - name: 恢复台账数据库
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/cache@v4
+        with:
+          path: pipeline/work
+          key: commission-db-${{ github.run_id }}
+          restore-keys: |
+            commission-db-
+
+      - name: 拉单 + 计算 + 导出台账数据
+        if: steps.gate.outputs.run == 'true'
+        id: pull
+        working-directory: pipeline
+        run: |
+          BACKFILL="${{ inputs.backfill_months }}"
+          if [ -z "$BACKFILL" ]; then BACKFILL=1; fi
+          python scripts/pull_orders.py --backfill "$BACKFILL" --out "$COMMISSION_DATA_OUTPUT"
+
+      - name: 校验产物
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          test -s public/data.js || { echo "data.js 不存在或为空"; exit 1; }
+          head -c 120 public/data.js
+          echo
+          grep -c '"orders"' public/data.js || true
+
+      - name: 发布到 Cloudflare Pages
+        if: steps.gate.outputs.run == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+        run: |
+          npx --yes wrangler@4 pages deploy public \
+            --project-name=autotc-pages \
+            --branch=main \
+            --commit-dirty=true
+
+      - name: 标记会话已处理
+        if: steps.gate.outputs.run == 'true' && success()
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          MODE: mark
+          SESSION_TIMESTAMP: ${{ steps.gate.outputs.timestamp }}
+        run: python pipeline/scripts/ci_session.py
+
+      - name: 汇总
+        if: always()
+        run: |
+          {
+            echo "## fetch-orders"
+            echo "- 是否执行：${{ steps.gate.outputs.run }}"
+            echo "- 门禁原因：${{ steps.gate.outputs.reason }}"
+            echo "- 会话年龄：${{ steps.gate.outputs.age_hours }} 小时"
+            echo "- data.js：$(stat -c%s public/data.js 2>/dev/null || echo 缺失) bytes"
+          } >> "$GITHUB_STEP_SUMMARY"

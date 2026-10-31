@@ -1,0 +1,46 @@
+# Cloudflare Pages 响应头策略
+# 说明：Functions 的响应不受本文件影响（/autotc/api/* 与 /api/* 由代码自行设置 no-store）
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+  X-Frame-Options: SAMEORIGIN
+
+# 入口页不缓存：发布后立刻生效，避免用户拿到旧的 data.js 版本号引用
+/index.html
+  Cache-Control: no-store
+
+/leaderboard.html
+  Cache-Control: no-store
+
+/install.html
+  Cache-Control: no-store
+
+/bookmark.html
+  Cache-Control: no-store
+
+/session.html
+  Cache-Control: no-store
+
+# 生成物短缓存 + 必须回源校验，配合 index.html 里的 ?v= 版本号
+/data.js
+  Cache-Control: public, max-age=300, must-revalidate
+
+# 静态资源可长缓存（文件名带版本号参数）
+/app.js
+  Cache-Control: public, max-age=3600, must-revalidate
+
+/styles.css
+  Cache-Control: public, max-age=3600, must-revalidate
+
+/leaderboard.js
+  Cache-Control: public, max-age=3600, must-revalidate
+
+/leaderboard.css
+  Cache-Control: public, max-age=3600, must-revalidate
+
+/manual.js
+  Cache-Control: public, max-age=3600, must-revalidate
+
+/autotc.user.js
+  Cache-Control: no-store

@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>会话上报 - 外烟提成系统</title>
+<style>
+  :root { --bg:#0f1512; --card:#17211d; --line:#2a3730; --txt:#e8f0ec; --dim:#8ba39a; --accent:#39c07a; --warn:#e0a33e; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin:0; background:var(--bg); color:var(--txt); font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif; padding:20px 16px 40px; line-height:1.6; }
+  h1 { font-size:19px; margin:0 0 4px; }
+  .sub { color:var(--dim); font-size:13px; margin-bottom:20px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; margin-bottom:14px; }
+  label { display:block; font-size:13px; color:var(--dim); margin:12px 0 6px; }
+  label:first-child { margin-top:0; }
+  textarea, input { width:100%; background:#0d1310; border:1px solid var(--line); color:var(--txt); border-radius:10px; padding:11px 12px; font-size:15px; font-family:ui-monospace,Menlo,monospace; }
+  textarea { min-height:104px; resize:vertical; line-height:1.5; }
+  button { width:100%; margin-top:16px; background:var(--accent); color:#06120c; border:0; border-radius:11px; padding:14px; font-size:16px; font-weight:700; }
+  button:disabled { opacity:.55; }
+  #out { margin-top:14px; font-size:14px; white-space:pre-wrap; word-break:break-word; }
+  .ok { color:var(--accent); }
+  .err { color:#ff7a6b; }
+  .tip { font-size:12.5px; color:var(--dim); }
+  .tip code { background:#0d1310; border:1px solid var(--line); border-radius:5px; padding:1px 5px; color:#b9d6c8; }
+  ol { padding-left:20px; margin:8px 0 0; }
+  li { margin-bottom:7px; font-size:13.5px; color:#cfe0d8; }
+</style>
+</head>
+<body>
+  <h1>会话上报</h1>
+  <div class="sub">把手机上登录后的会话交给服务器，触发一次自动拉单</div>
+
+  <div class="card">
+    <label for="payload">会话内容</label>
+    <textarea id="payload" placeholder='粘贴下面任意一种：&#10;{"loginId":"...","token":"...","mchntCd":"...","timestamp":"..."}&#10;或 MXA547297|token|mchntCd|timestamp'></textarea>
+    <label for="key">上报口令</label>
+    <input id="key" type="password" autocomplete="off" placeholder="6 位数字口令" />
+    <button id="go">提交并触发拉单</button>
+    <div id="out"></div>
+  </div>
+
+  <div class="card tip">
+    <strong>怎么拿到会话内容</strong>
+    <ol>
+      <li>手机浏览器打开并登录 MXIPOS 商户后台。</li>
+      <li>点「台账书签」——会自动提交，看到「已提交」就完事，不用来这个页面。</li>
+      <li>若书签没反应，它会把会话复制到剪贴板：回到本页粘贴，输入口令，点提交。</li>
+    </ol>
+    <p style="margin:10px 0 0">也可从已登录的电脑浏览器控制台执行：<br />
+    <code>copy(JSON.stringify(Object.fromEntries(Object.entries(localStorage))))</code> 后人工挑选四个字段。</p>
+  </div>
+
+<script>
+(function () {
+  var API = "/api/mxipos-session";
+  var out = document.getElementById("out");
+  function say(text, cls) { out.className = cls || ""; out.textContent = text; }
+
+  // 链接带 ?k= 时预填口令
+  (function () {
+    var preset = "";
+    try { preset = new URLSearchParams(location.search).get("k") || ""; } catch (e) { preset = ""; }
+    if (preset) document.getElementById("key").value = preset;
+  })();
+
+  function parsePayload(raw) {
+    var text = String(raw || "").trim();
+    if (!text) return null;
+    if (text.charAt(0) === "{") {
+      try { return JSON.parse(text); } catch (e) { return null; }
+    }
+    var parts = text.split("|").map(function (s) { return s.trim(); });
+    if (parts.length >= 4) {
+      return { loginId: parts[0], token: parts[1], mchntCd: parts[2], timestamp: parts[3], singleShopId: parts[4] || "" };
+    }
+    return null;
+  }
+
+  document.getElementById("go").addEventListener("click", async function () {
+    var btn = this;
+    var body = parsePayload(document.getElementById("payload").value);
+    var key = document.getElementById("key").value.trim();
+    if (!body) { say("会话内容格式不对：应为 JSON，或 loginId|token|mchntCd|timestamp", "err"); return; }
+    if (!key) { say("请填写上报口令", "err"); return; }
+    btn.disabled = true;
+    say("提交中…");
+    try {
+      var resp = await fetch(API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Session-Key": key },
+        body: JSON.stringify(body),
+      });
+      var data = await resp.json().catch(function () { return {}; });
+      if (resp.ok && data.ok) {
+        say("已提交，账号 " + (data.loginId || body.loginId) + "\n服务器正在拉单，约 1 分钟后看板会刷新。", "ok");
+      } else {
+        say("失败：" + (data.message || ("HTTP " + resp.status)), "err");
+      }
+    } catch (err) {
+      say("网络错误：" + err.message, "err");
+    } finally {
+      btn.disabled = false;
+    }
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "name": "commission-tool-pipeline",
+  "version": "1.0.0",
+  "private": true,
+  "description": "外烟提成系统 · 无浏览器计算链路（拉单 + 生成 + 台账 + 导出 data.js）",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "check": "node --check lib/commission_db.js && node --check lib/rules.js && node --check lib/schedule_core.js && node --check scripts/ledger_cli.js && node --check scripts/ledger_tools.js && node --check scripts/export_datajs.js && node --check scripts/recompute_commission.js"
+  },
+  "dependencies": {}
+}
