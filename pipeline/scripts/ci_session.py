@@ -132,7 +132,11 @@ def main():
         reason = "会话未变化 timestamp=%s，跳过" % timestamp
 
     if run and age_hours != "" and float(age_hours) >= 24.0:
-        reason += "；警告：会话已 %sh，超过 token 24h47m 上限，本次拉单大概率因 TK04 失败，需要手机重新登录上报" % age_hours
+        reason += (
+            "；提示：会话距今 %sh，已超过文档记录的 24h47m 上限，本次可能因 token 过期失败"
+            "（实测存在 28h 仍拉单成功的先例，该上限可能是按最近一次成功调用滑动计算，仅供参考）"
+            % age_hours
+        )
 
     emit_output({
         "run": "true" if run else "false",

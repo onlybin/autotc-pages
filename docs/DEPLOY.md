@@ -95,7 +95,7 @@ npx wrangler@4 pages deploy public --project-name=autotc-pages --branch=main --c
 
 | 场景 | 操作 |
 |---|---|
-| 手机 token 过期（≤24h47m 必然过期） | 手机上登录 MXIPOS → 点台账书签 → KV 更新 → 15 分钟内 Actions 自动拉到 |
+| 手机 token 过期 | 手机上登录 MXIPOS → 点台账书签 → KV 更新 → 15 分钟内 Actions 自动拉到。**注意**：文档记录的 token 上限 24h47m 并非硬线——2026-10-31 实测一个签发 28h 的会话仍能成功拉单，该上限可能是按最近一次成功调用滑动计算。真实判据看 Actions 日志里是否出现 `TK04`，不要仅凭会话年龄就催人重登 |
 | 手动强制拉一次 | Actions → `fetch-orders` → Run workflow → `force=true` |
 | 补历史月份 | 同上，`backfill_months` 填 2~24 |
 | 换上报口令 | 改 GitHub Secret `MXIPOS_SESSION_KEY` + `wrangler pages secret put`，重跑一次部署 |
