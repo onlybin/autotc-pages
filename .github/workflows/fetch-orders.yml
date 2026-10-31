@@ -32,6 +32,9 @@ permissions:
 env:
   CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
   CF_KV_NAMESPACE_ID: ${{ secrets.CF_KV_NAMESPACE_ID }}
+  # runner 默认 UTC。data.js 的 generatedAt、台账时间戳、导出文件名全部由本地时钟生成，
+  # 不锁时区会与旧通道（CST）差 8 小时，P5-5「新鲜度」判据会被误判成过期。
+  TZ: Asia/Shanghai
   COMMISSION_DB_PATH: ${{ github.workspace }}/pipeline/work/commission.sqlite3
   COMMISSION_DATA_OUTPUT: ${{ github.workspace }}/public/data.js
   # 会话文件路径不放这里：workflow 级 env 不支持 runner 上下文，
