@@ -136,7 +136,8 @@ jobs:
           # 自定义域所在 zone 的 Browser Cache TTL 会把静态资源覆盖成 4 小时，
           # 换版本号是唯一不改 zone 配置就能立刻生效的办法
           python3 pipeline/scripts/stamp_assets.py --dir public
-          grep -oE '(data|app|manual)\.js\?v=[0-9A-Za-z-]+|styles\.css\?v=[0-9A-Za-z-]+' public/index.html
+          # 仅作日志留痕：首页与订单详情页引用的资源名不同，命中不到不应让发布失败
+          grep -oE '[A-Za-z0-9_.-]+\.(js|css)\?v=[0-9A-Za-z-]+' public/index.html public/orders.html || true
 
       - name: 校验产物
         if: steps.gate.outputs.run == 'true'
