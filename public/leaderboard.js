@@ -1,5 +1,6 @@
 /* 员工提成排行榜：数据全部来自 /autotc/api/leaderboard（现有提成台账同一口径） */
 const lbApiBase = location.protocol === "file:" ? "" : "/autotc/api";
+
 const lbQuery = new URLSearchParams(location.search);
 const lbState = { month: lbQuery.get("month") || "", store: lbQuery.get("store") || "" };
 let lbData = null;
@@ -12,6 +13,28 @@ const lbEl = Object.fromEntries(
 
 const lbAliases = { 陈漠莉: "陈漫莉" };
 const lbName = (value) => lbAliases[String(value || "").split("/")[0].trim()] || String(value || "").split("/")[0].trim() || "未记录";
+
+/**
+ * 只展示「中文姓名」的收银员。
+ *
+ * 背景：台账的 cashier 字段里混有把手机号当姓名的脏数据（如 19557933364），
+ * 排行榜会把它当成一名员工渲染出来（0 元、1 单）。按姓名形态过滤比写死人名更稳：
+ * 真员工（刘超霞、陈漫莉…）照常显示，手机号 / 编号 / 英文名一律不显示。
+ *
+ * - 允许「阿依古丽·买买提」这类带间隔号的名字。
+ * - LB_VISIBLE_NAMES 留空 = 只按姓名形态过滤；填入名字可额外限定到具体某人。
+ * - 顶部「本月总提成」是门店级指标（summary.periodTotalCommission），不受本过滤影响。
+ */
+const LB_NAME_RE = /^[\u4e00-\u9fa5]{2,12}(?:[·•][\u4e00-\u9fa5]{1,12})?$/;
+const LB_VISIBLE_NAMES = [];
+
+function lbVisibleEmployees(employees) {
+  return (employees || []).filter((person) => {
+    const name = lbName(person.name);
+    if (LB_VISIBLE_NAMES.length && !LB_VISIBLE_NAMES.includes(name)) return false;
+    return LB_NAME_RE.test(name);
+  });
+}
 const lbMoney = (value) => `¥ ${Number(value || 0).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const lbEscape = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
 const AVATAR_COLORS = [
@@ -74,12 +97,14 @@ function renderRows(employees) {
     renderState("empty", "当前筛选条件下暂无提成数据，请尝试切换月份或门店。");
     return;
   }
-  lbEl.lbRows.innerHTML = top.map((person) => {
+  lbEl.lbRows.innerHTML = top.map((person, index) => {
     const name = lbName(person.name);
     const [c1, c2] = avatarColor(name);
+    // 名次按过滤后的顺序重排：服务端 rank 是全量口径，过滤掉脏数据后会出现空号
+    const rank = index + 1;
     return `
-    <div class="lb-row ${person.rank === 1 ? "lb-top1" : ""}" role="row">
-      <span class="lb-rank">${medalHtml(person.rank)}</span>
+    <div class="lb-row ${rank === 1 ? "lb-top1" : ""}" role="row">
+      <span class="lb-rank">${medalHtml(rank)}</span>
       <span class="lb-person">
         <span class="lb-avatar" style="background:linear-gradient(140deg,${c1},${c2})">${lbEscape(name.slice(0, 1))}</span>
         <span class="lb-person-meta"><b>${lbEscape(name)}</b><small>店员 · ${person.orderCount} 单</small></span>
@@ -152,7 +177,7 @@ async function loadLeaderboard() {
     lbData = data;
     lbState.month = data.month;
     renderFilters();
-    renderRows(data.employees || []);
+    renderRows(lbVisibleEmployees(data.employees || []));
     renderSummary(data.summary);
   } catch (error) {
     if (seq !== lbReqSeq) return;
