@@ -115,7 +115,7 @@ function apiUrl(path) {
 }
 
 async function apiFetch(path, options = {}) {
-  if (!apiBase) throw new Error("请通过线上 /autotc/manual.html 使用后台管理");
+  if (!apiBase) throw new Error("请通过线上地址访问后台管理");
   const response = await fetch(apiUrl(path), {
     credentials: "same-origin",
     headers: { "Content-Type": "application/json", ...(options.headers || {}) },

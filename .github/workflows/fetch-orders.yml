@@ -90,14 +90,39 @@ jobs:
           CUSTOM_RULES_B64: ${{ secrets.CUSTOM_RULES_B64 }}
         run: |
           python3 - <<'PY'
-          import base64, os, pathlib, sys
+          import base64, json, os, pathlib, sys, urllib.request
+
+          target = pathlib.Path("pipeline/custom_rules.json")
+
+          # 优先取旧通道 data.js 里的现行规则：店主在后台改了规则后，这里能自动跟上，
+          # 不必再手动更新 Secret。data.js 是公开的，不需要鉴权。
+          try:
+              req = urllib.request.Request(
+                  "https://aininja365.xyz/autotc/data.js",
+                  headers={"User-Agent": "autotc-ci/1.0"},
+              )
+              raw = urllib.request.urlopen(req, timeout=25).read().decode("utf-8")
+              payload = json.loads(raw.split("=", 1)[1].strip().rstrip(";"))
+              rules = payload.get("rules") or []
+              if rules:
+                  target.write_text(
+                      json.dumps({"updatedAt": payload.get("generatedAt", ""), "rules": rules},
+                                 ensure_ascii=False),
+                      encoding="utf-8",
+                  )
+                  print("规则源：旧通道 data.js（%d 条，generatedAt=%s）"
+                        % (len(rules), payload.get("generatedAt")))
+                  sys.exit(0)
+              print("旧通道 data.js 不含 rules，回退到 Secret 快照")
+          except Exception as exc:  # noqa: BLE001
+              print("取旧通道 data.js 失败（%s），回退到 Secret 快照" % exc)
+
           raw = os.environ.get("CUSTOM_RULES_B64", "").strip()
           if not raw:
-              sys.exit("缺少 secret CUSTOM_RULES_B64（规则清单，base64 后 11KB 左右）")
+              sys.exit("既拿不到线上规则，也没有 secret CUSTOM_RULES_B64")
           data = base64.b64decode(raw)
-          path = pathlib.Path("pipeline/custom_rules.json")
-          path.write_bytes(data)
-          print("custom_rules.json 已写入 %d bytes" % len(data))
+          target.write_bytes(data)
+          print("规则源：Secret 快照 %d bytes" % len(data))
           PY
 
       - name: 从 KV 取会话

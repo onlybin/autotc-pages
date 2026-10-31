@@ -22,13 +22,13 @@
         </label>
         <button class="primary-btn" type="submit">验证进入</button>
         <p class="form-status" id="loginStatus"></p>
-        <a class="text-link" href="index.html">返回统计看板</a>
+        <a class="text-link" href="/orders">返回统计看板</a>
       </form>
     </section>
 
     <div class="app-shell admin-shell" id="adminApp" hidden>
       <aside class="admin-sidebar" aria-label="后台导航">
-        <a class="brand admin-brand" href="manual.html" aria-label="外烟提成后台首页">
+        <a class="brand admin-brand" href="/manual" aria-label="外烟提成后台首页">
           <span class="brand-mark admin-brand-mark" aria-hidden="true">¥</span>
           <span>外烟提成后台</span>
         </a>
@@ -39,7 +39,7 @@
           <a href="#manualPanel"><span aria-hidden="true">▤</span><b>手工补录</b></a>
           <a href="#shiftSharePanel"><span aria-hidden="true">◇</span><b>排班系统</b></a>
           <a href="#rulesPanel"><span aria-hidden="true">⚙</span><b>提成规则</b></a>
-          <a href="index.html"><span aria-hidden="true">↗</span><b>统计看板</b></a>
+          <a href="/orders"><span aria-hidden="true">↗</span><b>统计看板</b></a>
         </nav>
         <div class="admin-sidebar-note">
           <span>规则来源</span>
@@ -57,14 +57,14 @@
           </div>
           <div class="top-actions">
             <button class="ghost-btn admin-icon-btn" id="exportManualBtn" type="button" aria-label="导出手工记录">⇩</button>
-            <a class="ghost-btn" href="index.html">返回统计</a>
+            <a class="ghost-btn" href="/orders">返回统计</a>
             <button class="ghost-btn" id="logoutBtn" type="button">退出后台</button>
             <span class="admin-avatar" aria-hidden="true">管</span>
           </div>
         </header>
 
         <nav class="admin-tabs" aria-label="后台工作区标签">
-          <a href="index.html">分析页</a>
+          <a href="/orders">分析页</a>
           <a class="active" href="#adminWorkbench">工作台</a>
           <a href="#rulesPanel">规则维护</a>
         </nav>

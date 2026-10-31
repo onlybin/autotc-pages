@@ -13,9 +13,12 @@
  *   前端数据区报错。这不是双活，只是多一个入口。彻底解耦是方案 B（Worker + D1）。
  *
  * 边界：
- *   1. 本 Function 只做只读透传，不解析业务逻辑，不注入/改写响应体。
- *   2. 不转发 Cookie —— 一期只开放只读看板；需要登录的后台接口
- *      （/api/rules、/api/manual-orders 等）会由上游返回 401，属预期 fail-closed。
+ *   1. 本 Function 只做透传，不解析业务逻辑，不注入/改写响应体。
+ *   2. 二期（2026-10-31）起放行写方法并转发 Cookie，以便后台管理页在新通道可用：
+ *      - 允许 GET/HEAD/POST/PUT/PATCH/DELETE
+ *      - 透传 Cookie（commission_admin_session，Path=/autotc，天然覆盖 /autotc/api/*）
+ *      - 逐条透传 Set-Cookie（登录/登出）
+ *      鉴权仍由上游 server.js 判定，未登录的写请求照样 401。
  *   3. 上游 CORS 与本站无关（server.js 的 MXIPOS_ORIGIN_RE 只放行 *.mxipos.com），
  *      同域反代因此天然规避跨域，不需要改动旧主机任何配置。
  */
@@ -23,12 +26,15 @@
 const UPSTREAM_ORIGIN = "https://aininja365.xyz";
 const API_PREFIX = "/autotc/api";
 
-/** 透传给上游的请求头白名单（显式排除 cookie / authorization / cf-*） */
+/** 透传给上游的请求头白名单 */
 const FORWARD_REQUEST_HEADERS = [
   "accept",
   "accept-language",
   "content-type",
   "x-requested-with",
+  // 后台管理需要登录态：server.js 下发的 commission_admin_session 是 Path=/autotc 的
+  // HttpOnly Cookie，浏览器在访问 /autotc/api/* 时会自动带上，必须原样透传
+  "cookie",
 ];
 
 /** 需要从上游响应中剔除的头（由 Workers 运行时重新计算，透传会导致响应体截断） */
@@ -38,10 +44,9 @@ const STRIP_RESPONSE_HEADERS = [
   "transfer-encoding",
   "connection",
   "keep-alive",
-  "set-cookie",
 ];
 
-const ALLOWED_METHODS = ["GET", "HEAD", "POST"];
+const ALLOWED_METHODS = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"];
 
 function jsonError(status, message, detail) {
   const payload = { ok: false, message, via: "pages-proxy" };
@@ -103,6 +108,10 @@ export async function onRequest(context) {
 
   const responseHeaders = new Headers(upstream.headers);
   for (const name of STRIP_RESPONSE_HEADERS) responseHeaders.delete(name);
+  // Set-Cookie 必须逐条追加：Headers 构造时可能把多条合并，浏览器会解析失败
+  responseHeaders.delete("set-cookie");
+  const cookies = typeof upstream.headers.getSetCookie === "function" ? upstream.headers.getSetCookie() : [];
+  for (const cookie of cookies) responseHeaders.append("set-cookie", cookie);
   // 与 nginx `add_header Cache-Control no-store always` 保持同一策略
   responseHeaders.set("cache-control", "no-store");
   responseHeaders.set("x-proxy-via", "legacy-aininja365");
