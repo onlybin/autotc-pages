@@ -245,6 +245,44 @@ export class CommissionStore {
     if (!columns.includes(columnName)) await this.db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
   }
 
+  /**
+   * 批量执行写语句。
+   * D1 单次 Worker 请求的子请求数有限（约 1000），逐行 execute 三千行必然超限，
+   * 因此把语句攒起来用 batch 提交（每批 100 条，单个事务）。
+   */
+  async flushStatements(statements, size = 100) {
+    if (!statements.length) return;
+    if (typeof this.adapter.batch === "function") {
+      for (let index = 0; index < statements.length; index += size) {
+        await this.adapter.batch(statements.slice(index, index + size));
+      }
+      return;
+    }
+    for (const statement of statements) await this.adapter.run(statement.sql, statement.params);
+  }
+
+  /**
+   * 预取规则集，返回"按时间点解析规则"的函数。
+   * 逐行调用 ruleSetAt 会对每行发一次查询，导入一个月就是几千次往返。
+   */
+  async ruleResolver() {
+    const sets = await this.db
+      .prepare("SELECT id,effective_from,superseded_at FROM rule_sets ORDER BY effective_from DESC,id DESC")
+      .all();
+    const cache = new Map();
+    return async (timestamp) => {
+      const target = timestamp || "9999-12-31 23:59:59";
+      for (const row of sets) {
+        if (row.superseded_at === null && String(row.effective_from) <= target) {
+          const id = Number(row.id);
+          if (!cache.has(id)) cache.set(id, await this.rulesForSet(id));
+          return { id, rules: cache.get(id) };
+        }
+      }
+      return null;
+    };
+  }
+
   // ---------- 规则 ----------
 
   async insertRuleSet(rules, effectiveFrom, source) {
@@ -314,7 +352,7 @@ export class CommissionStore {
     ) VALUES(${Array(36).fill("?").join(",")})`);
   }
 
-  async orderValues(item, ruleSetId, batchId, timestamp, preserveLegacy = false) {
+  async orderValues(item, ruleSetId, batchId, timestamp, preserveLegacy = false, resolver = null) {
     let calc;
     if (preserveLegacy) {
       calc = {
@@ -334,7 +372,8 @@ export class CommissionStore {
         auditReason: item.auditReason || "",
       };
     } else {
-      const set = (await this.ruleSetAt(item.checkoutTime || `${item.date} 23:59:59`)) || { id: ruleSetId, rules: [] };
+      const resolve = resolver || ((value) => this.ruleSetAt(value));
+      const set = (await resolve(item.checkoutTime || `${item.date} 23:59:59`)) || { id: ruleSetId, rules: [] };
       ruleSetId = set.id;
       calc = calculateCommission(item, set.rules);
     }
@@ -357,9 +396,21 @@ export class CommissionStore {
     });
     const insert = this.orderInsertStatement("INSERT OR IGNORE");
     const timestamp = String(payload.generatedAt || nowText());
+    const statements = [];
     for (const item of stableOrderKeys(payload.orders || [])) {
-      await insert.run(...(await this.orderValues(item, ruleSetId, batchId, timestamp, true)));
+      statements.push({ sql: null, params: null, kind: "legacy", item });
     }
+    // 逐行取值后再批量提交（orderValues 是异步的，无法在 batch 里惰性求值）
+    const filled = [];
+    for (const row of statements) {
+      const values = await this.orderValues(row.item, ruleSetId, batchId, timestamp, true);
+      filled.push({ sql: `INSERT OR IGNORE INTO orders(
+      line_key,store,order_id,payment_no,product_id,product_name,unit,original_quantity,quantity,quantity_basis,unit_price,amount,order_amount,refund,status,cashier,checkout_time,order_date,
+      rule_set_id,rule_key,rule_name,commission_per_unit,commission,match_type,expected_amount,min_allowed_amount,actual_amount,discount_amount,discount_rate,price_status,commission_status,audit_status,audit_reason,
+      first_seen_at,last_seen_at,source_batch_id
+    ) VALUES(${Array(36).fill("?").join(",")})`, params: values });
+    }
+    await this.flushStatements(filled);
     await this.db
       .prepare("UPDATE import_batches SET completed_at=?,status='success',row_count=? WHERE id=?")
       .run(timestamp, (payload.orders || []).length, batchId);
@@ -370,10 +421,13 @@ export class CommissionStore {
     const fallbackSet = await this.ensureBaselineRules(fallbackRules);
     const batchId = await this.createBatch({ targetMonth, sourceFilename, sourceSha256, isMonthClose });
     const timestamp = nowText();
-    const insert = this.orderInsertStatement();
-    const update = this.db.prepare(
-      `UPDATE orders SET store=?,payment_no=?,product_id=?,product_name=?,unit=?,original_quantity=?,quantity=?,quantity_basis=?,unit_price=?,amount=?,order_amount=?,refund=?,status=?,cashier=?,checkout_time=?,order_date=?,commission_per_unit=?,commission=?,match_type=?,expected_amount=?,min_allowed_amount=?,actual_amount=?,discount_amount=?,discount_rate=?,price_status=?,commission_status=?,audit_status=?,audit_reason=?,last_seen_at=?,source_batch_id=? WHERE line_key=?`,
-    );
+
+    const insertSql = `INSERT INTO orders(
+      line_key,store,order_id,payment_no,product_id,product_name,unit,original_quantity,quantity,quantity_basis,unit_price,amount,order_amount,refund,status,cashier,checkout_time,order_date,
+      rule_set_id,rule_key,rule_name,commission_per_unit,commission,match_type,expected_amount,min_allowed_amount,actual_amount,discount_amount,discount_rate,price_status,commission_status,audit_status,audit_reason,
+      first_seen_at,last_seen_at,source_batch_id
+    ) VALUES(${Array(36).fill("?").join(",")})`;
+    const updateSql = `UPDATE orders SET store=?,payment_no=?,product_id=?,product_name=?,unit=?,original_quantity=?,quantity=?,quantity_basis=?,unit_price=?,amount=?,order_amount=?,refund=?,status=?,cashier=?,checkout_time=?,order_date=?,commission_per_unit=?,commission=?,match_type=?,expected_amount=?,min_allowed_amount=?,actual_amount=?,discount_amount=?,discount_rate=?,price_status=?,commission_status=?,audit_status=?,audit_reason=?,last_seen_at=?,source_batch_id=? WHERE line_key=?`;
 
     // 原实现在循环里逐行 SELECT 已存在行；改成一次预取整月，语义等价但只有一次往返
     const existingRows = await this.db
@@ -383,8 +437,10 @@ export class CommissionStore {
       )
       .all(`${targetMonth}-01`, `${targetMonth}-31`);
     const existingMap = new Map(existingRows.map((row) => [row.line_key, row]));
+    const resolver = await this.ruleResolver();
 
     const touchedOrderIds = new Set();
+    const statements = [];
     let count = 0;
     for (const item of stableOrderKeys(orders || [])) {
       const existing = existingMap.get(item.lineKey);
@@ -401,19 +457,29 @@ export class CommissionStore {
             }
           : null;
         const calc = calculateCommission(item, frozenRule ? [frozenRule] : []);
-        await update.run(
-          item.store || "", item.paymentNo || "", item.productId || "", item.productName || "", item.unit || "", number(item.originalQuantity), number(item.quantity),
-          item.quantityBasis || "", number(item.unitPrice), number(item.amount), number(item.orderAmount ?? item.amount), number(item.refund), item.status || "", item.cashier || "", item.checkoutTime || "",
-          item.date || String(item.checkoutTime || "").slice(0, 10), calc.commissionPerUnit, calc.commission, calc.matchType,
-          calc.expectedAmount, calc.minAllowedAmount, calc.actualAmount, calc.discountAmount, calc.discountRate, calc.priceStatus, calc.commissionStatus, calc.auditStatus, calc.auditReason,
-          timestamp, batchId, item.lineKey,
-        );
+        statements.push({
+          sql: updateSql,
+          params: [
+            item.store || "", item.paymentNo || "", item.productId || "", item.productName || "", item.unit || "", number(item.originalQuantity), number(item.quantity),
+            item.quantityBasis || "", number(item.unitPrice), number(item.amount), number(item.orderAmount ?? item.amount), number(item.refund), item.status || "", item.cashier || "", item.checkoutTime || "",
+            item.date || String(item.checkoutTime || "").slice(0, 10), calc.commissionPerUnit, calc.commission, calc.matchType,
+            calc.expectedAmount, calc.minAllowedAmount, calc.actualAmount, calc.discountAmount, calc.discountRate, calc.priceStatus, calc.commissionStatus, calc.auditStatus, calc.auditReason,
+            timestamp, batchId, item.lineKey,
+          ],
+        });
       } else {
-        await insert.run(...(await this.orderValues(item, fallbackSet, batchId, timestamp, false)));
+        statements.push({
+          sql: insertSql,
+          params: await this.orderValues(item, fallbackSet, batchId, timestamp, false, resolver),
+        });
       }
       if (item.orderId) touchedOrderIds.add(String(item.orderId));
       count += 1;
     }
+
+    // 分批提交：单条请求内几千次 D1 调用会撞上子请求上限
+    await this.flushStatements(statements);
+
     const eligibility = this.revalidateOrderEligibility([...touchedOrderIds]);
     await this.db
       .prepare("UPDATE import_batches SET completed_at=?,status='success',row_count=?,error_message=NULL WHERE id=?")
