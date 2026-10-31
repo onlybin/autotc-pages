@@ -107,3 +107,14 @@
 | 两通道接口一致性 | `/report`、`/report?start&end`、`/report/periods`、`/leaderboard` 响应 sha256 完全相同 |
 | 数据新鲜度 | 旧 12:00:52 / 新 12:02:55，差 2 分 3 秒 |
 | 旧通道回归 | 首页 200 / 12,165 B 不变；`health` `ok:true, stale:false` |
+## 2026-10-31 · 后台管理页上线（二期）
+
+- `manual.html` / `manual_page.js` 从 `backend/` 移入 `public/`，路径 `/manual`
+- 反代放行 `PUT/PATCH/DELETE`、转发 `Cookie`、逐条透传 `Set-Cookie`
+- 页内链接：`index.html` → `/orders`（统计看板），`manual.html` → `/manual`
+- 排行榜首页「后台管理」按钮由旧通道绝对地址改为 `/manual`
+- 规则源改为优先取旧通道 `data.js` 的 `rules`（实测 49 条），Secret 快照仅作兜底
+- 修复 `stamp_assets.py` 漏掉 `manual_page.js` 的问题（该文件原本不会被刷版本号，会被 zone 缓存 4 小时）
+
+验证：未登录 `PUT/DELETE` → 401（方法已放行，鉴权在上游）；错误密码 → 401；
+正确密码 → 下发 `Path=/autotc` Cookie；带 Cookie 可读 `/session`、`/rules`(49)、`/shift-shares`、`/manual-orders`；登出正常。

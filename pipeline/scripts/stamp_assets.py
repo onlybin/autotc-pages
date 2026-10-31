@@ -25,7 +25,9 @@ from datetime import datetime
 
 # 只处理这些页面里出现的资源引用
 PAGES = ("index.html", "orders.html", "manual.html")
-ASSETS = ("data.js", "app.js", "manual.js", "styles.css", "leaderboard.js", "leaderboard.css")
+# 注意顺序：长名在前，避免 manual.js 抢先匹配掉 manual_page.js
+ASSETS = ("manual_page.js", "leaderboard.js", "leaderboard.css", "manual.js",
+          "data.js", "app.js", "styles.css")
 
 
 def main(argv):

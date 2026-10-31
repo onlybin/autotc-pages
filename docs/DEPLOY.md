@@ -192,3 +192,30 @@ wrangler deploy                       # 需要 Cloudflare 令牌含「账户 · 
 | 15:46:4x | 运行把 `session_processed` 标记为 `2026-10-31 15:36:50` |
 
 **从点书签到看板更新：约 9 分半**（受 15 分钟 cron 粒度 + 10 分钟冷却影响，最坏约 25 分钟）。
+
+## 10. 后台管理页（二期，2026-10-31 上线）
+
+| 项 | 值 |
+|---|---|
+| 地址 | `https://auto.aininja365.xyz/manual` |
+| 源文件 | `public/manual.html` + `public/manual_page.js`（`manual.js` 为共用函数库） |
+| 鉴权 | 上游 `server.js` 的密码登录，Cookie `commission_admin_session`，`Path=/autotc`、`HttpOnly`、`SameSite=Lax`、8 小时 |
+| 写库目标 | **旧主机的 SQLite**（经同域反代），不是 Cloudflare 侧 |
+
+代理为此放行 `PUT/PATCH/DELETE` 并转发 `Cookie`、逐条回传 `Set-Cookie`。**代理本身不做鉴权**，
+未登录的写请求由上游返回 401（已实测：无 Cookie 的 `PUT /autotc/api/rules` → 401 而非 405）。
+
+### 必须知道的三条口径差异
+
+1. **旧平板死机时后台不可用**。写操作全打到旧主机，这不是容灾方案。
+2. **后台改了规则，`data.js` 里的提成不会立刻变**。看板实时数字走 API（读旧主机），改了立即生效；
+   但 Actions 生成的 `data.js` 是另一份台账，规则从旧通道 `data.js` 的 `rules` 取（每 6 小时一次），
+   最坏滞后 6 小时。`data.js` 只是接口不可达时的兜底，不影响正常看板。
+3. **手工补录的订单不会进 Actions 侧台账**。补录只写旧主机 DB，`generate_data.py` 只处理 MXIPOS 导出的 ZIP。
+   所以看板（走 API）能看到补录，`data.js` 兜底看不到。二期若要一致，需把补录一并同步。
+
+### 未验证项
+
+写入类接口（`PUT /api/rules`、`POST /api/manual-orders`、`DELETE`）只验证到「方法被放行 + 未登录被 401 拦截」，
+**没有在真实数据上执行写操作**——避免伪造补录或误改生产规则。首次真实使用时请用一次性的小改动确认，例如
+新增一条可删除的补录记录。
