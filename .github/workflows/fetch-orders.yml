@@ -73,6 +73,7 @@ jobs:
       - name: 门禁结论
         run: |
           echo "run=${{ steps.gate.outputs.run }}"
+          echo "report=${{ steps.gate.outputs.report }}"
           echo "reason=${{ steps.gate.outputs.reason }}"
           echo "age_hours=${{ steps.gate.outputs.age_hours }}"
           if [ -n "${{ steps.gate.outputs.reason }}" ]; then
@@ -163,7 +164,9 @@ jobs:
         env:
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
           MODE: mark
-          SESSION_TIMESTAMP: ${{ steps.gate.outputs.timestamp }}
+          # 标记的是"这次上报"（updatedAt），不是 token 签发时间——
+          # 同一次登录反复点书签时 timestamp 不变，用它会导致每次都重复拉单或永远跳过
+          SESSION_REPORT: ${{ steps.gate.outputs.report }}
         run: python pipeline/scripts/ci_session.py
 
       - name: 汇总

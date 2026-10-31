@@ -108,7 +108,13 @@ npx wrangler@4 pages deploy public --project-name=autotc-pages --branch=main --c
 2. **Actions 侧台账是独立的一份**，从首次运行开始累积，不含 2026-10 之前的历史月份。
    `data.js` 是按月导出（`export_datajs.js --month`），当期数字与旧通道一致；
    要补历史月份用 `backfill_months` 逐月回灌。
-3. **Actions cron 不准时**：官方最小间隔 5 分钟，高负载下可延迟数十分钟。
+3. **★ GitHub 的 schedule 在本仓库实测不触发**（2026-10-31 验证）：`fetch-orders` 的
+   `*/15` 连续 5 个 slot（12:00/12:15/12:30/12:45/13:00）无一运行，另建的 `*/5` 探针也 2 个 slot 全空。
+   仓库侧条件全部正常（Actions `enabled:true`、非 archived/fork、默认分支 `main`、当日内有 push）。
+   结论：**不能依赖 GitHub cron 做自动更新**，目前只能手动 Run workflow。
+   若需要真正自动化，需引入外部触发（Cloudflare Worker Cron → `workflow_dispatch`），
+   代价是一个「仅限本仓库 + 仅 Actions:write」的细粒度 PAT 存进 Cloudflare Secret。
+4. **Actions cron 本身也不准时**：官方最小间隔 5 分钟，高负载下可延迟数十分钟。
    实际 SLA 按「上报后最坏 1 小时内生效」理解，不要承诺"1 分钟"。
 4. **15 分钟轮询是为响应速度而非成本**：仓库为 public，Actions 分钟数免费；
    若将来转 private，2000 分钟/月会被 96 次/天的轮询吃光，必须把轮询降到 6 小时或改 PAT 直触发。

@@ -74,13 +74,13 @@ def main():
         return 1
 
     if mode == "mark":
-        # 拉单成功后把本次会话标记为已处理
-        timestamp = os.environ.get("SESSION_TIMESTAMP", "").strip()
-        if not timestamp:
-            print("SESSION_TIMESTAMP 为空，跳过标记")
+        # 拉单成功后把本次上报（updatedAt）标记为已处理
+        report = os.environ.get("SESSION_REPORT", "").strip()
+        if not report:
+            print("SESSION_REPORT 为空，跳过标记")
             return 0
-        status = kv_put(token, account, namespace, "session_processed", timestamp)
-        print("已标记 session_processed=%s (http %s)" % (timestamp, status))
+        status = kv_put(token, account, namespace, "session_processed", report)
+        print("已标记 session_processed=%s (http %s)" % (report, status))
         return 0
 
     if mode == "session":
@@ -96,7 +96,10 @@ def main():
         os.chmod(target, 0o600)
         payload = json.loads(raw)
         print("已写入会话 loginId=%s updatedAt=%s" % (payload.get("loginId"), payload.get("updatedAt")))
-        emit_output({"timestamp": str(payload.get("timestamp") or "")})
+        emit_output({
+            "report": str(payload.get("updatedAt") or ""),
+            "timestamp": str(payload.get("timestamp") or ""),
+        })
         return 0
 
     # mode == gate
@@ -104,13 +107,13 @@ def main():
     raw, error = kv_get(token, account, namespace, "mxipos_session")
     if not raw:
         emit_output({"run": "false", "reason": "KV 中还没有会话（手机尚未上报）：%s" % error,
-                     "timestamp": "", "age_hours": ""})
+                     "report": "", "timestamp": "", "age_hours": ""})
         return 0
 
     try:
         session = json.loads(raw)
     except json.JSONDecodeError:
-        emit_output({"run": "false", "reason": "KV 会话不是合法 JSON", "timestamp": "", "age_hours": ""})
+        emit_output({"run": "false", "reason": "KV 会话不是合法 JSON", "report": "", "timestamp": "", "age_hours": ""})
         return 0
 
     timestamp = str(session.get("timestamp") or "")
@@ -119,21 +122,27 @@ def main():
     except (TypeError, ValueError):
         age_hours = ""
 
+    # 变更信号用 updatedAt，不能用 timestamp：
+    #   timestamp 是 token 的**签发时间**，同一次登录反复点书签都不会变。
+    #   店主点书签的语义是"刷新一下"，用 timestamp 判断会导致每次都判成"未变化"而跳过。
+    #   updatedAt 由接收端在每次 POST 时重写，才是"有新上报"的可靠信号。
+    report = str(session.get("updatedAt") or "")
+
     processed, _ = kv_get(token, account, namespace, "session_processed")
     processed = (processed or "").strip()
 
-    changed = bool(timestamp) and timestamp != processed
+    changed = bool(report) and report != processed
     run = force or changed
     if force:
         reason = "强制触发（cron 兜底 / 手动 dispatch）"
     elif changed:
-        reason = "检测到新会话 timestamp=%s（上次已处理=%s）" % (timestamp, processed or "无")
+        reason = "检测到新上报 updatedAt=%s（上次已处理=%s）" % (report, processed or "无")
     else:
-        reason = "会话未变化 timestamp=%s，跳过" % timestamp
+        reason = "本次上报已处理过 updatedAt=%s，跳过" % report
 
     if run and age_hours != "" and float(age_hours) >= 24.0:
         reason += (
-            "；提示：会话距今 %sh，已超过文档记录的 24h47m 上限，本次可能因 token 过期失败"
+            "；提示：token 签发距今 %sh，已超过文档记录的 24h47m 上限，本次可能因 token 过期失败"
             "（实测存在 28h 仍拉单成功的先例，该上限可能是按最近一次成功调用滑动计算，仅供参考）"
             % age_hours
         )
@@ -141,6 +150,7 @@ def main():
     emit_output({
         "run": "true" if run else "false",
         "reason": reason,
+        "report": report,
         "timestamp": timestamp,
         "age_hours": str(age_hours),
     })
