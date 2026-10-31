@@ -1,0 +1,22 @@
+# autotc-cron：用 Cloudflare Cron 替代失效的 GitHub schedule
+# 部署：在 worker/ 目录执行 `wrangler deploy`
+# 密钥：GH_TRIGGER_TOKEN 用 `wrangler secret put` 写入，不落本文件
+
+name = "autotc-cron"
+main = "src/index.js"
+compatibility_date = "2026-10-31"
+
+# 与 Pages 项目共用同一个 KV（会话 + 已处理标记 + 上次触发时间）
+[[kv_namespaces]]
+binding = "MXIPOS_SESSION"
+id = "ea68992a2bdd4ef98cfe24a9f9d5699a"
+
+[vars]
+GH_OWNER = "onlybin"
+GH_REPO = "autotc-pages"
+GH_WORKFLOW = "fetch-orders.yml"
+GH_REF = "main"
+
+# 15 分钟一次；Worker 内部还有 10 分钟冷却，实际不会连发
+[triggers]
+crons = ["*/15 * * * *"]

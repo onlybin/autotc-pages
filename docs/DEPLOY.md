@@ -111,9 +111,7 @@ npx wrangler@4 pages deploy public --project-name=autotc-pages --branch=main --c
 3. **★ GitHub 的 schedule 在本仓库实测不触发**（2026-10-31 验证）：`fetch-orders` 的
    `*/15` 连续 5 个 slot（12:00/12:15/12:30/12:45/13:00）无一运行，另建的 `*/5` 探针也 2 个 slot 全空。
    仓库侧条件全部正常（Actions `enabled:true`、非 archived/fork、默认分支 `main`、当日内有 push）。
-   结论：**不能依赖 GitHub cron 做自动更新**，目前只能手动 Run workflow。
-   若需要真正自动化，需引入外部触发（Cloudflare Worker Cron → `workflow_dispatch`），
-   代价是一个「仅限本仓库 + 仅 Actions:write」的细粒度 PAT 存进 Cloudflare Secret。
+   **已用 Cloudflare Worker `autotc-cron` 替代**（见第 9 节），自动更新不依赖 GitHub 定时器。
 4. **Actions cron 本身也不准时**：官方最小间隔 5 分钟，高负载下可延迟数十分钟。
    实际 SLA 按「上报后最坏 1 小时内生效」理解，不要承诺"1 分钟"。
 4. **15 分钟轮询是为响应速度而非成本**：仓库为 public，Actions 分钟数免费；
@@ -146,4 +144,38 @@ grep -rIn --exclude-dir=.git --exclude-dir=node_modules -e "$OLD_KEY" -e 'COMMIS
 
 # 3) 确认产物不含浏览器链路
 grep -rIln --exclude-dir=.git -E 'puppeteer|puppeteer-extra|chrome-launcher|Runtime\.enable|slider' . || echo "OK: 无浏览器链路"
+```
+
+## 9. 自动触发：Cloudflare Worker `autotc-cron`
+
+GitHub 自带的 `schedule` 在本仓库不工作，因此改由 Cloudflare 的 Cron Trigger 兜底。
+
+| 项 | 值 |
+|---|---|
+| Worker 名 | `autotc-cron` |
+| 地址 | `https://autotc-cron.tel18207595.workers.dev` |
+| Cron | `*/15 * * * *`（15 分钟） |
+| 代码 | `worker/src/index.js`，配置 `worker/wrangler.toml` |
+| KV 绑定 | `MXIPOS_SESSION`（与 Pages 共用 `ea68992a…5699a`） |
+| 密钥 | `GH_TRIGGER_TOKEN`（Worker Secret，细粒度 PAT：仅本仓库 + 操作读写） |
+
+判定顺序（与 `ci_session.py` 一致，额外加了三层保护）：
+
+1. KV 无会话 → 跳过
+2. 距上次触发 < 10 分钟 → 跳过（防连点）
+3. 最近一次运行 `queued / in_progress / waiting` → 跳过（不排队）
+4. 最近一次运行失败且 < 60 分钟 → 跳过（失败退避，防止 token 过期后每 15 分钟刷一次红）
+5. `updatedAt != session_processed` → 触发 `force=false`（有新上报）
+6. 距上次触发 ≥ 6 小时 → 触发 `force=true`（兜底刷新，对齐旧主机节奏）
+
+调试：`GET https://autotc-cron.tel18207595.workers.dev/?dry=1` 只做判定不发请求，返回
+`action` / `force` / `reason` / `report` / `processed`。去掉 `?dry=1` 会真的触发。
+
+> 注意：`workers.dev` 域名在国内常被墙，本地 curl 需要走代理；Worker 本身运行在 Cloudflare
+> 内部，调 GitHub 不受此影响。
+
+部署命令（在 `worker/` 目录）：
+
+```bash
+wrangler deploy                       # 需要 Cloudflare 令牌含「账户 · Workers 脚本 · 编辑」
 ```
