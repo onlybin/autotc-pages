@@ -1,0 +1,25 @@
+name: cron-probe
+
+# 诊断专用：确认本仓库的 schedule 触发器是否真的会触发。
+# 与 fetch-orders 的唯一差异是 cron 频率（*/5 vs */15），用于区分
+# 「仓库级 schedule 未生效」与「fetch-orders 自身配置问题」。判定完即删除。
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 打印触发信息
+        run: |
+          echo "event=${{ github.event_name }}"
+          echo "schedule=${{ github.event.schedule }}"
+          echo "utc=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          echo "cst=$(TZ=Asia/Shanghai date +'%Y-%m-%d %H:%M:%S')"
