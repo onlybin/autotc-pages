@@ -1707,6 +1707,12 @@ body:has(.side-rail) .overview-grid {
   gap: 14px;
 }
 
+/* 订单详情页：收银员排行区块已抽到首页，overview-grid 只剩两张卡片。
+   若仍按三列布局，第三列会留一片空白。 */
+body:has(.side-rail) .overview-grid:not(:has(.leaderboard-panel)) {
+  grid-template-columns: minmax(420px, 1.48fr) minmax(230px, 0.58fr);
+}
+
 body:has(.side-rail) .hero-card {
   position: relative;
   display: grid;

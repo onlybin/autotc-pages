@@ -31,7 +31,7 @@ docs/              DEPLOY.md（运维手册）/ DEPRECATED.md（弃用登记）/
 
 ## 一期能力边界（如实表述）
 
-- ✅ 只读看板 + 排行榜（`index.html` / `leaderboard.html`）
+- ✅ 排行榜首页（`/`）+ 订单详情页（`/orders`）
 - ✅ Actions 定时拉单 + 算提成 + 生成 `data.js` + 发布
 - ✅ 手机 token 上报切到新域名（KV）
 - ⚠️ 看板实时数字**反代旧主机**，旧平板死机时数据区不可用——方案 A 是过渡形态

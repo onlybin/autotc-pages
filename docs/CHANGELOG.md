@@ -1,5 +1,25 @@
 # 变更记录
 
+## 2026-10-31 · 页面结构调整（排行榜升为首页）
+
+按店主需求把入口改成「先看排行、再下钻明细」：
+
+| 路径 | 内容 | 说明 |
+|---|---|---|
+| `/` | **员工提成排行榜** | 由原 `leaderboard.html` 内容承担；`lbDetailBtn` 与 `leaderboard.js` 的跳转全部改指 `/orders` |
+| `/orders` | **订单详情**（原看板） | 由原 `index.html` 内容承担；标题改为「订单详情 ORDER DETAIL」；移除 `#leaderboard` 收银员排行区块（已在首页）与对应侧栏锚点 |
+| `/leaderboard` | 兜底到首页 | `leaderboard.html` 已删除，Pages 对未知路径返回 `index.html`，旧书签仍可打开排行榜 |
+
+配套改动：
+
+- `public/app.js`：`renderLeaderboard()` 增加元素存在性护栏——区块删除后 `el.leaderboard` 为 `null`，
+  原代码会抛 `TypeError` 并中断整个 `render()`，导致订单详情页白屏。
+- `public/styles.css`：`.overview-grid` 在有侧栏时是三列，删掉排行榜面板后第三列会留白，
+  补 `:not(:has(.leaderboard-panel))` 的两列规则。
+- `public/index.html`：「后台管理」按钮由失效的 `manual.html` 改为旧通道绝对地址（新窗口打开）。
+- `pipeline/scripts/stamp_assets.py`：页面清单由 `index.html/leaderboard.html` 改为 `index.html/orders.html`。
+- `public/_headers`：`/leaderboard.html` 的 no-store 规则改为 `/orders.html`。
+
 ## 2026-10-31 · 新通道首次建立（Pages 迁移）
 
 ### 基线

@@ -133,12 +133,12 @@ function renderFilters() {
     lbEl.lbStore.value = lbData.store || "";
     lbEl.lbStore.disabled = false;
   }
-  lbEl.lbDetailBtn.href = `index.html?month=${encodeURIComponent(lbData.month)}#detailPanel`;
+  lbEl.lbDetailBtn.href = `orders.html?month=${encodeURIComponent(lbData.month)}#detailPanel`;
 }
 
 async function loadLeaderboard() {
   if (!lbApiBase) {
-    renderState("error", "请通过系统服务地址访问本页面（/autotc/leaderboard.html）。");
+    renderState("error", "请通过系统服务地址访问本页面（https://auto.aininja365.xyz/）。");
     return;
   }
   const seq = ++lbReqSeq;

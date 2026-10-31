@@ -233,6 +233,9 @@ function render() {
 }
 
 function renderLeaderboard(people) {
+  // 排行榜已独立为首页，订单详情页不再包含该区块；元素不存在时直接跳过，
+  // 否则 el.leaderboard 为 null 会抛 TypeError 并中断整个 render()
+  if (!el.leaderboard || !el.peopleCount) return;
   el.peopleCount.textContent = `${people.length} 人`;
   if (!people.length) { el.leaderboard.innerHTML = '<div class="empty">当前筛选下暂无指定收银员提成</div>'; return; }
   const max = people[0].commission || 1;

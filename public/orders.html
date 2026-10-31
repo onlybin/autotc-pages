@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>订单详情 · 外烟提成统计系统</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="styles.css?v=20260812-allocation-readable" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="side-rail" aria-label="统计系统导航">
+        <a class="rail-link" href="/"><span aria-hidden="true">♕</span><b>提成排行榜</b></a>
+        <a class="rail-link" href="#dailyChart"><span aria-hidden="true">▥</span><b>提成统计</b></a>
+        <a class="rail-link" href="#productList"><span aria-hidden="true">◈</span><b>商品管理</b></a>
+        <a class="rail-link active" href="#detailPanel"><span aria-hidden="true">☷</span><b>订单详情</b></a>
+        <!-- 决策 2-A：一期只上只读看板，后台 manual.html / manual_page.js 不部署到 Pages，
+             后台仍在旧通道 https://aininja365.xyz/autotc/manual.html 维护 -->
+        <div class="rail-motto">
+          <span>KEEP WINNING</span>
+          <strong>每一次努力<br />都值得被看见</strong>
+        </div>
+      </aside>
+      <header class="app-topbar">
+        <a class="brand" href="/" aria-label="返回提成排行榜首页">
+          <span class="brand-mark" aria-hidden="true">M</span>
+          <span><b>订单详情</b><small>ORDER DETAIL</small></span>
+        </a>
+        <p class="top-meta" id="sourceLine">正在读取数据...</p>
+        <div class="top-actions">
+          <div class="user-box" aria-label="当前用户">
+            <span class="user-avatar" aria-hidden="true"></span>
+            <span><b>欢迎回来，管理员</b><small>超级管理员</small></span>
+          </div>
+          <button class="ghost-btn" id="exportBtn" type="button">导出明细</button>
+          <button class="ghost-btn" id="resetBtn" type="button">重置筛选</button>
+          <span class="notice-bell" aria-hidden="true"></span>
+        </div>
+      </header>
+
+      <main class="main-stack">
+        <section class="notice-panel stale-banner" id="staleBanner" hidden>
+          <div><strong>订单数据已经超过 7 小时未更新</strong><p id="staleMessage">请检查自动拉单任务。</p></div>
+        </section>
+
+        <section class="filter-panel" aria-label="筛选条件">
+          <label>
+            <span>月份快捷选择</span>
+            <select id="monthFilter"></select>
+          </label>
+          <label>
+            <span>收银员</span>
+            <select id="personFilter"></select>
+          </label>
+          <label>
+            <span>开始日期</span>
+            <input id="startDateFilter" type="date" />
+          </label>
+          <label>
+            <span>结束日期</span>
+            <input id="endDateFilter" type="date" />
+          </label>
+          <label class="search-field">
+            <span>商品 / 订单 / 流水</span>
+            <input id="searchInput" type="search" placeholder="输入商品名、订单号或支付流水号" />
+          </label>
+          <div class="segmented" role="group" aria-label="数据视图">
+            <button class="active" data-mode="commission" type="button">有提成</button>
+            <button data-mode="all" type="button">全部商品</button>
+            <button data-mode="unmatched" type="button">待匹配</button>
+          </div>
+        </section>
+
+        <section class="overview-grid">
+          <article class="hero-card">
+            <div class="trophy-art" aria-hidden="true">
+              <div class="laurel left"></div>
+              <div class="cup">
+                <span class="cup-shield">★</span>
+                <span class="cup-stem"></span>
+                <span class="cup-base"></span>
+              </div>
+              <div class="laurel right"></div>
+            </div>
+            <div class="hero-copy">
+              <p class="section-kicker">本期提成</p>
+              <strong id="totalCommission">¥0.00</strong>
+              <span id="heroHint">每一笔命中规则的订单都会自动计入。</span>
+            </div>
+          </article>
+
+          <article class="panel goal-card">
+            <div class="section-head compact">
+              <div>
+                <p class="section-kicker">销售目标进度</p>
+                <h2 id="goalLabel">¥0 / ¥0</h2>
+              </div>
+            </div>
+            <div class="goal-ring" id="goalRing">
+              <div>
+                <strong id="goalPercent">0%</strong>
+                <span>达成率</span>
+              </div>
+            </div>
+            <div class="progress-track">
+              <div class="progress-fill" id="goalProgress"></div>
+            </div>
+            <p id="goalText">计提商品销售额 / 销售目标，正在读取后台设定。</p>
+            <button id="goalPolicyHint" class="goal-policy-hint" type="button" title="计量目标值为：上两个月的平均值结合作业人数，综合评估值">目标达成率影响提成发放，点击查看说明</button>
+          </article>
+
+          <!-- 收银员排行区块已抽走：排行榜现已独立为首页 /，本页只做订单详情 -->
+        </section>
+
+        <section class="kpi-grid" aria-label="关键指标">
+          <article class="metric">
+            <i class="metric-icon package" aria-hidden="true"></i>
+            <span>计提包数</span>
+            <strong id="kpiQty">0</strong>
+            <small>条装按 10 包折算</small>
+          </article>
+          <article class="metric">
+            <i class="metric-icon coins" aria-hidden="true"></i>
+            <span>提成销售额</span>
+            <strong id="kpiSales">¥0.00</strong>
+            <small>命中规则商品销售额</small>
+          </article>
+          <article class="metric">
+            <i class="metric-icon orders" aria-hidden="true"></i>
+            <span>提成订单数</span>
+            <strong id="kpiOrders">0</strong>
+            <small>按订单号去重</small>
+          </article>
+          <article class="metric attention">
+            <i class="metric-icon shield" aria-hidden="true"></i>
+            <span>待补规则</span>
+            <strong id="kpiUnmatched">0</strong>
+            <small>非快速收银且未匹配</small>
+          </article>
+        </section>
+
+        <section class="content-grid">
+          <article class="panel">
+            <div class="section-head">
+              <div>
+                <p class="section-kicker">每日趋势</p>
+                <h2>提成节奏</h2>
+              </div>
+              <span class="status-pill" id="dateRangeLabel"></span>
+            </div>
+            <div id="dailyChart" class="bar-chart"></div>
+          </article>
+
+          <article class="panel">
+            <div class="section-head">
+              <div>
+                <p class="section-kicker">商品贡献</p>
+                <h2>热销提成商品</h2>
+              </div>
+              <span class="status-pill" id="productCount">0 项</span>
+            </div>
+            <div id="productList" class="product-list"></div>
+          </article>
+        </section>
+
+        <section class="panel detail-panel" id="detailPanel">
+          <div class="section-head">
+            <div>
+              <p class="section-kicker">按收银员与日期查询</p>
+              <h2>提成订单详情</h2>
+            </div>
+            <span class="status-pill" id="detailCount">0 行</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>时间</th>
+                  <th>订单号</th>
+                  <th>订单金额核对</th>
+                  <th>支付流水号</th>
+                  <th>收银员</th>
+                  <th>均分说明</th>
+                  <th>商品</th>
+                  <th>匹配规则</th>
+                  <th class="num">原数量</th>
+                  <th>单位</th>
+                  <th class="num">计提包数</th>
+                  <th class="num">单价</th>
+                  <th class="num">销售额</th>
+                  <th class="num">规则应收</th>
+                  <th class="num">最低实收</th>
+                  <th>价格状态</th>
+                  <th class="num">提成/包</th>
+                  <th class="num">提成</th>
+                  <th>匹配方式</th>
+                </tr>
+              </thead>
+              <tbody id="detailBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <dialog id="orderDetailDialog" class="order-detail-dialog">
+          <div class="order-detail-card">
+            <div class="section-head order-detail-head">
+              <div>
+                <p class="section-kicker">整单核对</p>
+                <h2 id="orderDetailTitle">订单详情</h2>
+              </div>
+              <button id="closeOrderDetailBtn" class="icon-button" type="button" aria-label="关闭订单详情">×</button>
+            </div>
+            <div id="orderDetailSummary" class="order-detail-summary"></div>
+            <div id="orderDetailNote" class="order-detail-note" hidden></div>
+            <div id="orderAllocationPanel" class="order-detail-note" hidden>
+              <strong>快速收银金额手动分摊</strong>
+              <p>该订单包含快速收银金额。管理员可在这里核对并手动分好规则内商品金额，保存后订单详情会保留手动分摊记录。</p>
+              <div id="orderAllocationBody"></div>
+              <label class="search-field">
+                <span>核对备注</span>
+                <input id="orderAllocationNote" type="text" placeholder="例如：管理员已核对快速收银金额归属" />
+              </label>
+              <label class="search-field">
+                <span>确认密码</span>
+                <input id="orderAllocationPassword" type="password" placeholder="请输入确认密码后保存" autocomplete="off" />
+              </label>
+              <button id="saveOrderAllocationBtn" class="ghost-btn" type="button">保存手动分摊</button>
+              <span id="orderAllocationStatus" class="status-pill"></span>
+            </div>
+            <div class="table-wrap">
+              <table class="order-detail-table">
+                <thead>
+                  <tr>
+                    <th>时间</th>
+                    <th>支付流水号</th>
+                    <th>商品</th>
+                    <th>规则</th>
+                    <th class="num">数量</th>
+                    <th>单位</th>
+                    <th class="num">单价</th>
+                    <th class="num">实收金额</th>
+                    <th class="num">提成/包</th>
+                    <th class="num">提成</th>
+                    <th>匹配方式</th>
+                  </tr>
+                </thead>
+                <tbody id="orderDetailBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </dialog>
+      </main>
+    </div>
+
+    <script src="data.js?v=20260622-2"></script>
+    <!-- manual.js 保留：它是纯函数库（240 行、零网络调用），app.js 全篇依赖其中的 escapeHtml，
+         去掉会直接导致页面渲染报错。后台页面 manual.html / manual_page.js 不部署，与此文件无关。 -->
+    <script src="manual.js?v=20261025-trad-placeholder"></script>
+    <script src="app.js?v=20261029-fixdupe-1"></script>
+  </body>
+</html>

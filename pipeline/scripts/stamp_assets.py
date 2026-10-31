@@ -24,7 +24,7 @@ import sys
 from datetime import datetime
 
 # 只处理这些页面里出现的资源引用
-PAGES = ("index.html", "leaderboard.html")
+PAGES = ("index.html", "orders.html")
 ASSETS = ("data.js", "app.js", "manual.js", "styles.css", "leaderboard.js", "leaderboard.css")
 
 
