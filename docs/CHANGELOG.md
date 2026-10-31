@@ -50,9 +50,15 @@
 
 ### 验证记录
 
+详细逐条结论见 `docs/VERIFY-20261031.md`。要点：
+
 | 项 | 结果 |
 |---|---|
 | 快照字节校验 | 51/51 完全一致 |
 | Functions 单元测试（Node 原生 Request/Response） | 35/35 通过 |
-| 台账往返（线上 `data.js` → SQLite → 导出） | 3,136 行订单**逐字节一致**；`rules` / `metrics` / `period` 全等；总字节差 2 B，来自 `generatedAt` 与 `source.orders` 两个元数据字段 |
-| 提成口径 | `totalCommission=264`、`commissionRows=99`、`people=2`、`unmatchedRows=386` 与线上一致 |
+| 台账往返（线上 `data.js` → SQLite → 导出） | 3,136 行订单**逐字节一致**；`rules` / `metrics` / `period` 全等 |
+| P0 门禁（Azure runner 172.210.6.17） | HTTP 200，响应含 `data.img` → **WAF 放行，可直连** |
+| 全链路首次运行 | 16 步全绿，约 40 秒完成 3,172 单拉取+计算+发布 |
+| 两通道接口一致性 | `/report`、`/report?start&end`、`/report/periods`、`/leaderboard` 响应 sha256 完全相同 |
+| 数据新鲜度 | 旧 12:00:52 / 新 12:02:55，差 2 分 3 秒 |
+| 旧通道回归 | 首页 200 / 12,165 B 不变；`health` `ok:true, stale:false` |
