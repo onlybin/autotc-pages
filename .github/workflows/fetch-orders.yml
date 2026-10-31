@@ -80,23 +80,8 @@ jobs:
           fi
 
       # ---------- 真正的拉单链路（仅在需要时执行）----------
-      - name: 写入上报口令（部署期注入，仓库内只有占位符）
-        if: steps.gate.outputs.run == 'true'
-        env:
-          MXIPOS_SESSION_KEY: ${{ secrets.MXIPOS_SESSION_KEY }}
-        run: |
-          python3 - <<'PY'
-          import os, pathlib, sys
-          key = os.environ.get("MXIPOS_SESSION_KEY", "").strip()
-          if not key:
-              sys.exit("缺少 secret MXIPOS_SESSION_KEY")
-          path = pathlib.Path("public/autotc.user.js")
-          text = path.read_text(encoding="utf-8")
-          if "__SESSION_KEY__" not in text:
-              sys.exit("占位符 __SESSION_KEY__ 不存在，拒绝重复注入")
-          path.write_text(text.replace("__SESSION_KEY__", key), encoding="utf-8")
-          print("已注入上报口令（%d 位）" % len(key))
-          PY
+      # 注意：这里**不做**口令注入。注入会让 6 位口令重新出现在公网产物里，
+      # 与 P5-9「Pages 产物无 6 位口令」冲突。口令由手机端首次上报时本地输入并存在 localStorage。
 
       - name: 写入规则源（custom_rules.json，不入 git）
         if: steps.gate.outputs.run == 'true'
@@ -144,6 +129,14 @@ jobs:
             --backfill "$BACKFILL" \
             --out "$COMMISSION_DATA_OUTPUT" \
             --session "$RUNNER_TEMP/mxipos_session/mxipos_api_session.json"
+
+      - name: 刷新静态资源版本号
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          # 自定义域所在 zone 的 Browser Cache TTL 会把静态资源覆盖成 4 小时，
+          # 换版本号是唯一不改 zone 配置就能立刻生效的办法
+          python3 pipeline/scripts/stamp_assets.py --dir public
+          grep -oE '(data|app|manual)\.js\?v=[0-9A-Za-z-]+|styles\.css\?v=[0-9A-Za-z-]+' public/index.html
 
       - name: 校验产物
         if: steps.gate.outputs.run == 'true'

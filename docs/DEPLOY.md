@@ -116,6 +116,12 @@ npx wrangler@4 pages deploy public --project-name=autotc-pages --branch=main --c
    泄露面是代码逻辑与规则结构，不含逐笔销售额。首次推送前务必再跑一次凭据扫描（见第 8 节）。
 6. **口径未修**：`generate_data.py` 的 `checkoutTime=row[16]` / `remark=row[22]` 列错位是已知缺陷，
    迁移不负责修。若顺手修了必须单独说明。
+7. **自定义域的静态资源被 zone 缓存策略压到 4 小时**：`aininja365.xyz` 这个 zone 的
+   Browser Cache TTL 会把 `Cache-Control` 统一改写为 `max-age=14400`，覆盖 Pages 的 `_headers`
+   （`pages.dev` 域名下 `_headers` 是完全生效的，可对比验证）。旧通道同样如此，属既有配置，
+   按护栏 6 不去改 zone 设置。因此发布前用 `pipeline/scripts/stamp_assets.py` 刷新 `?v=` 版本号，
+   HTML 本身是 `no-store`，换 query 即可立刻拿到新数据。**修改 `app.js` / `styles.css` 后
+   必须走一次发布**，否则用户最多 4 小时看到旧文件。
 
 ## 7. 回滚
 

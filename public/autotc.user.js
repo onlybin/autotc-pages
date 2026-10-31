@@ -13,11 +13,31 @@
 (function () {
   "use strict";
 
-  // 口令由部署期从 GitHub Secret 注入替换，仓库里只保留占位符（护栏 3：凭据不入库）
-  var KEY = "__SESSION_KEY__";
+  // 口令不写死在脚本里，也不在部署期注入 —— 否则公网产物里就又出现明文口令，
+  // 与 P5-9「Pages 产物无 6 位口令」冲突。改为首次上报时弹一次输入框，
+  // 之后存在本机 localStorage（每台手机各自保存，口令本身由店主单独发放）。
+  var KEY_STORE = "__autotc_session_key";
+  var KEY = "";
+  try { KEY = localStorage.getItem(KEY_STORE) || ""; } catch (e) { KEY = ""; }
   var API = "https://auto.aininja365.xyz/api/mxipos-session";
   var LAST = "__autotc_last_token";
   var nextAt = 0;
+
+  function ensureKey() {
+    if (KEY) return true;
+    var input = "";
+    try {
+      input = window.prompt("首次上报需要口令（6 位数字，由店主发放，只需输入一次）", "");
+    } catch (e) { input = ""; }
+    input = String(input || "").trim();
+    if (input.length < 4) {
+      nextAt = Date.now() + 10 * 60 * 1000; // 10 分钟内不再打扰
+      return false;
+    }
+    KEY = input;
+    try { localStorage.setItem(KEY_STORE, KEY); } catch (e) { /* 隐私模式忽略 */ }
+    return true;
+  }
 
   function toast(msg, ok) {
     try {
@@ -83,6 +103,7 @@
     if (!o || !o.token) return;
     if (!o.loginId || !o.mchntCd || !o.timestamp) return;
     if (alreadySent(o.token)) return;
+    if (!ensureKey()) return;
 
     busy = true;
     fetch(API, {
@@ -96,7 +117,7 @@
       var b = res.body || {};
       if (b.ok) {
         markSent(o.token);
-        toast("台账已更新（" + o.loginId + "），服务器正在拉单", true);
+        toast("台账已更新（" + o.loginId + "），数据约 15 分钟内同步", true);
       } else {
         nextAt = Date.now() + 30000;
         toast("上报失败：" + (b.message || res.status), false);

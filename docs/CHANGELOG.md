@@ -20,8 +20,9 @@
 | `bookmark.html` | 101 | 兜底提示里的路径改由 `U` 常量推导 | 书签运行在 mxipos.com，`location.origin` 会指错站点 |
 | `session.html` | 55 | `/autotc/api/mxipos-session` → `/api/mxipos-session` | 相对路径会命中 catch-all 反代被转发去旧主机，新 KV 收不到 |
 | `autotc.user.js` | 3-4 | `@namespace` 换新域，`@version` 1.0.0 → 2.0.0 | 便于 Tampermonkey 识别升级 |
-| `autotc.user.js` | 16 | `KEY = "<旧口令>"` → `KEY = "__SESSION_KEY__"` | 护栏 3：凭据不入库。部署期由 GitHub Secret 注入 |
+| `autotc.user.js` | 16 | `KEY = "<旧口令>"` → localStorage 存一次、首次上报时弹框输入 | 护栏 3 + P5-9：任何注入方式都会让 6 位口令重新出现在公网产物里，改为纯客户端持有 |
 | `autotc.user.js` | 17 | API 常量 → `https://auto.aininja365.xyz/api/mxipos-session` | 换新域名 |
+| `autotc.user.js` | 120 | 成功提示改为「数据约 15 分钟内同步」 | KV 轮询模式下不再是「服务器正在拉单」，避免误导 |
 
 `app.js` / `leaderboard.js` / `leaderboard.css` / `styles.css` / `manual.js` / `data.js` **零改动**——
 方案 A 下 `apiBase = "/autotc/api"` 是相对路径，同域反代天然命中。
@@ -34,6 +35,7 @@
 | `functions/api/mxipos-session.js` | 手机 token 接收端（KV + CORS + 口令） |
 | `pipeline/scripts/pull_orders.py` | Actions 拉单入口（去 fcntl、去硬路径） |
 | `pipeline/scripts/ci_session.py` | KV 门禁 / 取会话 / 标记已处理 |
+| `pipeline/scripts/stamp_assets.py` | 发布前刷新 `?v=` 版本号，绕过 zone 级 4 小时缓存 |
 | `.github/workflows/fetch-orders.yml` | 拉单 + 计算 + 发布 |
 | `.github/workflows/heartbeat.yml` | 防 60 天停用 |
 | `.github/workflows/p0-gate.yml` | P0 门禁实验（海外 IP 能否过 WAF） |
