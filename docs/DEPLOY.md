@@ -179,3 +179,16 @@ GitHub 自带的 `schedule` 在本仓库不工作，因此改由 Cloudflare 的 
 ```bash
 wrangler deploy                       # 需要 Cloudflare 令牌含「账户 · Workers 脚本 · 编辑」
 ```
+
+### 实测闭环（2026-10-31）
+
+| 时刻 | 事件 |
+|---|---|
+| 15:36:50 | 手机点书签，接收端写入 KV，`updatedAt` 变为 `2026-10-31 15:36:50` |
+| 15:43:13 | 10 分钟冷却结束（上次手动触发在 15:33:13） |
+| 15:45 | Cron 到点（`*/15`），Worker 读到 `updatedAt` 与 `session_processed` 不一致 |
+| 15:46:01 | Worker 调 `workflow_dispatch`（`force=false`），运行 `41181885878` 启动 |
+| 15:46:23 | `data.js` 刷新（3,967,508 B），发布到 Pages |
+| 15:46:4x | 运行把 `session_processed` 标记为 `2026-10-31 15:36:50` |
+
+**从点书签到看板更新：约 9 分半**（受 15 分钟 cron 粒度 + 10 分钟冷却影响，最坏约 25 分钟）。
