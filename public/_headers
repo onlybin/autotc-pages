@@ -13,6 +13,17 @@
 /orders.html
   Cache-Control: no-store
 
+# 干净 URL 与旧路径：Pages 对"真实存在的静态文件"会给 7 天边缘缓存（s-maxage=604800），
+# 页面一旦改名或删除就会留下长时间不更新的副本。这两条把老书签路径钉成不缓存。
+/orders
+  Cache-Control: no-store
+
+/leaderboard
+  Cache-Control: no-store
+
+/leaderboard.html
+  Cache-Control: no-store
+
 /install.html
   Cache-Control: no-store
 
