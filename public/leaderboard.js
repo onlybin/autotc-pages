@@ -61,7 +61,7 @@ function renderSkeleton() {
       <span class="lb-skel" style="width:26px"></span>
       <span style="display:flex;gap:12px;align-items:center"><span class="lb-skel circle"></span><span class="lb-skel" style="width:90px"></span></span>
       <span class="lb-skel" style="width:80px"></span>
-      <span class="lb-skel" style="width:80px"></span>
+      ${LB_SHOW_TOTAL_COMMISSION ? '<span class="lb-skel" style="width:80px"></span>' : ""}
       <span class="lb-skel"></span>
     </div>`).join("");
 }
@@ -111,10 +111,27 @@ function renderRows(employees) {
         <span class="lb-person-meta"><b>${lbEscape(name)}</b><small>店员 · ${person.orderCount} 单</small></span>
       </span>
       <span class="lb-money month"><b>${lbMoney(person.currentPeriodCommission)}</b></span>
-      <span class="lb-money total">${lbMoney(person.cumulativeCommission)}</span>
+      ${LB_SHOW_TOTAL_COMMISSION ? `<span class="lb-money total">${lbMoney(person.cumulativeCommission)}</span>` : ""}
       <span class="lb-progress-cell">${progressHtml(person)}</span>
     </div>`;
   }).join("");
+}
+
+/**
+ * 是否在排行榜上展示"总提成"。
+ *
+ * 店主要求隐藏，故为 false。关闭时同时隐藏两处：
+ *   1. 顶部"本月总提成"卡片
+ *   2. 表格里的"总提成"列（累计总提成）
+ * 改回 true 即恢复，排版会随 body.lb-hide-total 自动切换，无需改其它代码。
+ */
+const LB_SHOW_TOTAL_COMMISSION = false;
+
+function applyTotalCommissionVisibility() {
+  if (LB_SHOW_TOTAL_COMMISSION) return;
+  document.body.classList.add("lb-hide-total");
+  lbEl.lbTotal?.closest(".lb-card-total")?.remove();
+  document.querySelector('.lb-thead [data-col="total"]')?.remove();
 }
 
 /** 提成发放档位，与后端 salesTargetCommissionPayout() 一一对应，改动需两边同步 */
@@ -230,4 +247,5 @@ async function loadLeaderboard() {
 lbEl.lbMonth.addEventListener("change", () => { lbState.month = lbEl.lbMonth.value; loadLeaderboard(); });
 lbEl.lbStore.addEventListener("change", () => { lbState.store = lbEl.lbStore.value; loadLeaderboard(); });
 
+applyTotalCommissionVisibility();
 loadLeaderboard();

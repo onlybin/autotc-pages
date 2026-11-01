@@ -477,3 +477,12 @@
   .lb-footer p { flex-wrap: wrap; justify-content: center; }
   .lb-footer-line { display: none; }
 }
+
+/* 隐藏"总提成"：卡片少一张、表格少一列（由 leaderboard.js 的 LB_SHOW_TOTAL_COMMISSION 控制） */
+body.lb-hide-total .lb-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+body.lb-hide-total .lb-thead,
+body.lb-hide-total .lb-row,
+body.lb-hide-total .lb-skel-row { grid-template-columns: 60px minmax(190px, 1.5fr) 132px minmax(230px, 280px); }
+@media (max-width: 520px) {
+  body.lb-hide-total .lb-cards { grid-template-columns: 1fr; }
+}
