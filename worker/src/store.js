@@ -1253,15 +1253,24 @@ export class CommissionStore {
       const map = new Map();
       for (const row of commissioned) {
         const name = typeof key === "function" ? key(row) : row[key];
-        const item = map.get(name) || { name: name || "未记录", quantity: 0, commission: 0, sales: 0, orders: new Set() };
+        const item = map.get(name) || { name: name || "未记录", quantity: 0, commission: 0, originalCommission: 0, sales: 0, orders: new Set() };
         item.quantity += number(row.quantity);
         item.commission += number(row.commission);
+        // 未乘档位系数的原始提成，供前端展示"当前提成 → 可实得"
+        item.originalCommission += number(row.originalCommission ?? row.commission);
         item.sales += number(row.amount);
         item.orders.add(row.orderId);
         map.set(name, item);
       }
       return [...map.values()]
-        .map((item) => ({ name: item.name, quantity: roundMoney(item.quantity), commission: roundMoney(item.commission), sales: roundMoney(item.sales), orderCount: item.orders.size }))
+        .map((item) => ({
+          name: item.name,
+          quantity: roundMoney(item.quantity),
+          commission: roundMoney(item.commission),
+          originalCommission: roundMoney(item.originalCommission),
+          sales: roundMoney(item.sales),
+          orderCount: item.orders.size,
+        }))
         .sort((a, b) => b.commission - a.commission);
     };
     const size = Math.max(1, Math.min(1000, Number(pageSize) || 500));
@@ -1327,6 +1336,7 @@ export class CommissionStore {
         employeeId: person.name,
         name: person.name,
         currentPeriodCommission: roundMoney(person.commission),
+        originalCommission: roundMoney(person.originalCommission ?? person.commission),
         cumulativeCommission: roundMoney(cumulative.get(person.name)?.commission ?? person.commission),
         sales: roundMoney(person.sales),
         quantity: roundMoney(person.quantity),

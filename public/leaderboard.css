@@ -495,3 +495,9 @@ body.lb-hide-total-col .lb-skel-row { grid-template-columns: 60px minmax(190px, 
 .lb-amount-item b { font-size: 15px; color: #26406b; font-variant-numeric: tabular-nums; }
 .lb-amount-item.is-paid b { color: #0b63ce; }
 .lb-amount-sep { color: #9ab0cc; font-size: 14px; flex: none; }
+
+/* 员工行：可实得为主，当前提成为辅 */
+.lb-money.month em { display: block; margin-top: 2px; font-style: normal; font-size: 11px; font-weight: 500; color: #8aa0bd; font-variant-numeric: tabular-nums; }
+/* 卡片三数：当前销售提成 / 当前销售目标 / 可实得提成 */
+.lb-amount-item.is-rate { align-items: center; text-align: center; flex: none; }
+.lb-amount-item.is-rate b { color: #0b63ce; font-size: 16px; }

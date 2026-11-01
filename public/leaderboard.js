@@ -5,6 +5,8 @@ const lbQuery = new URLSearchParams(location.search);
 const lbState = { month: lbQuery.get("month") || "", store: lbQuery.get("store") || "" };
 let lbData = null;
 let lbReqSeq = 0;
+/** 当期档位系数与是否已结算（渲染员工行时需要，故先于 renderRows 赋值） */
+let lbPayout = { rate: 100, applied: false };
 
 const lbEl = Object.fromEntries(
   ["lbMonth", "lbStore", "lbRows", "lbBoardSub", "lbTotal", "lbTrend", "lbGoalPercent", "lbGoalBar", "lbGoalNums", "lbGoalHint", "lbDetailBtn",
@@ -103,6 +105,10 @@ function renderRows(employees) {
     const [c1, c2] = avatarColor(name);
     // 名次按过滤后的顺序重排：服务端 rank 是全量口径，过滤掉脏数据后会出现空号
     const rank = index + 1;
+    // 可实得：已结算按实发值；未结算（当月）按当前档位预估
+    const original = Number(person.originalCommission ?? person.currentPeriodCommission);
+    const paid = lbPayout.applied ? Number(person.currentPeriodCommission) : Math.round(original * lbPayout.rate) / 100;
+    const split = Math.abs(original - paid) >= 0.005;
     return `
     <div class="lb-row ${rank === 1 ? "lb-top1" : ""}" role="row">
       <span class="lb-rank">${medalHtml(rank)}</span>
@@ -110,7 +116,7 @@ function renderRows(employees) {
         <span class="lb-avatar" style="background:linear-gradient(140deg,${c1},${c2})">${lbEscape(name.slice(0, 1))}</span>
         <span class="lb-person-meta"><b>${lbEscape(name)}</b><small>店员 · ${person.orderCount} 单</small></span>
       </span>
-      <span class="lb-money month"><b>${lbMoney(person.currentPeriodCommission)}</b></span>
+      <span class="lb-money month"><b>${lbMoney(paid)}</b>${split ? `<em>当前 ${lbMoney(original)}</em>` : ""}</span>
       ${LB_SHOW_TOTAL_COMMISSION ? `<span class="lb-money total">${lbMoney(person.cumulativeCommission)}</span>` : ""}
       <span class="lb-progress-cell">${progressHtml(person)}</span>
     </div>`;
@@ -162,22 +168,20 @@ function renderGoalRule(summary) {
   // 当月只提示、不真正调整；历史完整月份才按档位结算（后端 appliesCommissionPayout 的语义）
   const hintOnly = String(data.commissionPolicyText || "").startsWith("当前月只提示");
   lbEl.lbGoalRule.hidden = false;
-  lbEl.lbGoalRuleTag.textContent = hintOnly
-    ? `达成 ${percent.toFixed(2)}% → ${active.label}（本月仅提示，次月按此档结算）`
-    : `达成 ${percent.toFixed(2)}% → ${active.label}，按 ${active.rate}% 发放`;
+  lbEl.lbGoalRuleTag.textContent = hintOnly ? `${active.label} · ${active.rate}%（本月仅提示）` : `${active.label} · 按 ${active.rate}% 发放`;
   lbEl.lbGoalRuleList.innerHTML = LB_PAYOUT_TIERS.map(
     (tier) => `<li class="${tier === active ? "is-active" : ""}"><span>${tier.label}</span><b>${tier.rate}%</b></li>`,
   ).join("");
 
-  // 两个金额：100% 口径的基础提成 vs 按当前档位发放的金额
+  // 三个数：当前销售提成 → 当前销售目标达成率 → 可实得提成
   const base = Number(data.originalPeriodCommission) || 0;
   const rawRate = Number(data.commissionPayoutRate);
   const rate = Number.isFinite(rawRate) ? rawRate : 100;
   const paid = hintOnly ? Math.round(base * rate) / 100 : Number(data.periodTotalCommission) || 0;
   lbEl.lbGoalRuleAmounts.innerHTML = `
-    <span class="lb-amount-item"><em>100% 全额提成</em><b>${lbMoney(base)}</b></span>
-    <span class="lb-amount-sep" aria-hidden="true">→</span>
-    <span class="lb-amount-item is-paid"><em>${hintOnly ? `本档 ${rate}% 预估` : `本档 ${rate}% 发放`}</em><b>${lbMoney(paid)}</b></span>`;
+    <span class="lb-amount-item"><em>当前销售提成</em><b>${lbMoney(base)}</b></span>
+    <span class="lb-amount-item is-rate"><em>当前销售目标</em><b>${percent.toFixed(2)}%</b></span>
+    <span class="lb-amount-item is-paid"><em>${hintOnly ? "可实得提成（预估）" : "可实得提成"}</em><b>${lbMoney(paid)}</b></span>`;
 
   lbEl.lbGoalRuleNote.textContent = String(data.commissionPolicyText || "");
 }
@@ -244,6 +248,9 @@ async function loadLeaderboard() {
     lbData = data;
     lbState.month = data.month;
     renderFilters();
+    const summaryNow = data.summary || {};
+    const rawRate = Number(summaryNow.commissionPayoutRate);
+    lbPayout = { rate: Number.isFinite(rawRate) ? rawRate : 100, applied: Boolean(summaryNow.appliesCommissionPayout) };
     renderRows(lbVisibleEmployees(data.employees || []));
     renderSummary(data.summary);
   } catch (error) {
