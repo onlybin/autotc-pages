@@ -118,19 +118,17 @@ function renderRows(employees) {
 }
 
 /**
- * 是否在排行榜上展示"总提成"。
+ * 是否展示员工排行表格里的"总提成"列（累计总提成）。
  *
- * 店主要求隐藏，故为 false。关闭时同时隐藏两处：
- *   1. 顶部"本月总提成"卡片
- *   2. 表格里的"总提成"列（累计总提成）
- * 改回 true 即恢复，排版会随 body.lb-hide-total 自动切换，无需改其它代码。
+ * 店主要求隐藏该列，故为 false。**只影响表格这一列**，
+ * 顶部的"本月总提成"卡片不受影响、照常显示。
+ * 改回 true 即恢复，列宽随 body.lb-hide-total-col 自动切换。
  */
 const LB_SHOW_TOTAL_COMMISSION = false;
 
-function applyTotalCommissionVisibility() {
+function applyTotalColumnVisibility() {
   if (LB_SHOW_TOTAL_COMMISSION) return;
-  document.body.classList.add("lb-hide-total");
-  lbEl.lbTotal?.closest(".lb-card-total")?.remove();
+  document.body.classList.add("lb-hide-total-col");
   document.querySelector('.lb-thead [data-col="total"]')?.remove();
 }
 
@@ -247,5 +245,5 @@ async function loadLeaderboard() {
 lbEl.lbMonth.addEventListener("change", () => { lbState.month = lbEl.lbMonth.value; loadLeaderboard(); });
 lbEl.lbStore.addEventListener("change", () => { lbState.store = lbEl.lbStore.value; loadLeaderboard(); });
 
-applyTotalCommissionVisibility();
+applyTotalColumnVisibility();
 loadLeaderboard();
