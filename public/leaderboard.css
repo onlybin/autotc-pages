@@ -483,3 +483,15 @@
 body.lb-hide-total-col .lb-thead,
 body.lb-hide-total-col .lb-row,
 body.lb-hide-total-col .lb-skel-row { grid-template-columns: 60px minmax(190px, 1.5fr) 132px minmax(230px, 280px); }
+
+/* 档位说明里的两个金额：100% 全额提成 → 本档实际发放 */
+.lb-goal-rule-amounts {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  margin-top: 9px; padding: 8px 10px; border-radius: 9px;
+  background: rgba(11, 99, 206, 0.07);
+}
+.lb-amount-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.lb-amount-item em { font-style: normal; font-size: 11px; color: #6b7f9e; letter-spacing: 0.3px; }
+.lb-amount-item b { font-size: 15px; color: #26406b; font-variant-numeric: tabular-nums; }
+.lb-amount-item.is-paid b { color: #0b63ce; }
+.lb-amount-sep { color: #9ab0cc; font-size: 14px; flex: none; }

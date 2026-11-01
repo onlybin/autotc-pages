@@ -1344,6 +1344,11 @@ export class CommissionStore {
       employees,
       summary: {
         periodTotalCommission: roundMoney(periodTotal),
+        // 100% 口径的基础提成（未乘档位系数），与按档位实发金额一起给前端做对比说明
+        originalPeriodCommission: roundMoney(number(current.summary?.originalTotalCommission)),
+        commissionPayoutRate: number(current.salesTarget?.commissionPayoutRate, 100),
+        commissionPayoutMultiplier: number(current.salesTarget?.commissionMultiplier, 1),
+        appliesCommissionPayout: Boolean(current.salesTarget?.appliesCommissionPayout),
         previousPeriodCommission: previousPeriodCommission === null ? null : roundMoney(previousPeriodCommission),
         changePercent: previousPeriodCommission ? roundMoney(((periodTotal - previousPeriodCommission) / previousPeriodCommission) * 100) : null,
         orderCount: current.summary?.orderCount || 0,

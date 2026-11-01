@@ -8,7 +8,7 @@ let lbReqSeq = 0;
 
 const lbEl = Object.fromEntries(
   ["lbMonth", "lbStore", "lbRows", "lbBoardSub", "lbTotal", "lbTrend", "lbGoalPercent", "lbGoalBar", "lbGoalNums", "lbGoalHint", "lbDetailBtn",
-   "lbGoalRule", "lbGoalRuleTag", "lbGoalRuleList", "lbGoalRuleNote"]
+   "lbGoalRule", "lbGoalRuleTag", "lbGoalRuleList", "lbGoalRuleAmounts", "lbGoalRuleNote"]
     .map((id) => [id, document.getElementById(id)])
 );
 
@@ -168,6 +168,17 @@ function renderGoalRule(summary) {
   lbEl.lbGoalRuleList.innerHTML = LB_PAYOUT_TIERS.map(
     (tier) => `<li class="${tier === active ? "is-active" : ""}"><span>${tier.label}</span><b>${tier.rate}%</b></li>`,
   ).join("");
+
+  // 两个金额：100% 口径的基础提成 vs 按当前档位发放的金额
+  const base = Number(data.originalPeriodCommission) || 0;
+  const rawRate = Number(data.commissionPayoutRate);
+  const rate = Number.isFinite(rawRate) ? rawRate : 100;
+  const paid = hintOnly ? Math.round(base * rate) / 100 : Number(data.periodTotalCommission) || 0;
+  lbEl.lbGoalRuleAmounts.innerHTML = `
+    <span class="lb-amount-item"><em>100% 全额提成</em><b>${lbMoney(base)}</b></span>
+    <span class="lb-amount-sep" aria-hidden="true">→</span>
+    <span class="lb-amount-item is-paid"><em>${hintOnly ? `本档 ${rate}% 预估` : `本档 ${rate}% 发放`}</em><b>${lbMoney(paid)}</b></span>`;
+
   lbEl.lbGoalRuleNote.textContent = String(data.commissionPolicyText || "");
 }
 
